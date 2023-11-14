@@ -1,0 +1,18 @@
+Components:
+  1: Cs, 0.51155
+  2: I, 0.48845
+
+density: 4.51
+omega: 0.87
+xi: 0.83
+ek: 35
+kenergy: 30
+pf: 0.72
+ce: 0.59
+m0: 55.6
+
+mu_mass_abs: 7.907025736
+mu_mass_tot: 8.733446589
+
+spread_type: "Lorentzian"
+spread_coeff: 0.15

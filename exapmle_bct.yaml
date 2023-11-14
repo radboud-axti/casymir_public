@@ -1,0 +1,28 @@
+system_id: example bct
+description: Test bCT system
+
+detector:
+  type: indirect
+  active_layer: CsI
+  px_size: 0.1518
+  ff: 0.83
+  thick: 700
+  layer: 7
+  elems: 256
+  add_noise: 100
+  extra_materials: [(Al, 0.05), (Carbon Fiber, 2.5), (Silica, 1)]
+
+source:
+  target_angle: 10
+  target: W
+  SID: 95
+  filter: [(Be, 1.4), (Al, 1.42), (Al, 0.044)]
+  external_filter: [(Al, 10), (Air, 950)]
+
+# stages:
+#   selection
+#   parallel_gain
+#   scintillator_blur
+#   optical_coupling
+#   pixel_aperture
+

@@ -1,0 +1,15 @@
+Components:
+  1: Se, 1
+
+density: 4.78
+omega: 0.596
+xi: 0.864
+ek: 12.66
+kenergy: 11.3794
+w: 0.050
+pf: 1
+
+mu_mass_abs: 27.8074
+mu_mass_tot: 29.4103
+
+spread_type: "Charge redistribution"
