@@ -79,7 +79,6 @@ class Detector:
 
     def get_mu(self, energy):
         # Populates attenuation coefficient given the energy vector
-        # mu = xrdb.mu_elam(self.components[0][0], energy=energy * 1e3, kind='total')
         mu = np.empty((len(energy), len(self.components)))
         i = 0
         for component in self.components:
@@ -94,6 +93,16 @@ class Detector:
         self.get_mu(energy)
         QE = 1 - np.exp(-(self.mu * self.thick * 1e-4 * self.material["density"]))
         return QE
+
+    def com_term_z(self, energy):
+        # Scintillator escape efficiency
+        com_term = np.zeros([self.thick, len(energy)])
+        for z in range(self.thick):
+            com_term[z, :] = np.exp(-1*self.mu * (self.thick - z) * 1e-4 * self.material["density"]
+                                    * self.material["pf"]) * (0.19497 + (0.59363 * np.exp(-z / 310.10304))) \
+                             * (1 - np.exp(-1*self.mu * 1e-4 * self.material["density"] * self.material["pf"]))
+
+        return com_term
 
 
 class Tube:
@@ -269,147 +278,4 @@ class Signal:
 
     # Pending: add more robust signal processing routines.
 
-
-def parallel_gains_direct(detector, energy, spectrum, fk, kV):
-    k = 0
-    kbi = 1.1
-    Eps = detector.material["xi"]
-    w = detector.material["w"]
-    Ek = detector.material["ek"]
-    QE = detector.get_QE(energy)
-
-    Ma = np.zeros(len(energy))
-    Mb = np.zeros(len(energy))
-    Mc = np.zeros(len(energy))
-    Mabc = np.zeros(len(energy))
-    MaDenom = np.zeros(len(energy))
-    MbDenom = np.zeros(len(energy))
-    McDenom = np.zeros(len(energy))
-
-    diffEnergy = float(energy[1] - energy[0])
-    for E1 in np.arange(kbi, kV + diffEnergy, diffEnergy):
-
-        if E1 < detector.material["ek"]:
-            w0 = 0.0
-            diff = 0.0
-
-        else:
-            if E1 >= detector.material["ek"]:
-                w0 = detector.material["omega"]
-                diff = E1 - detector.material["ek"]
-
-        """    
-        Path A: Light emitted locally, when no K x-ray is produced
-        Path B: Light emitted locally, when a K x-ray is produced
-        Path C: Light emitted remotely, when a K x-ray is produced
-        """
-        Ma[k] = (1 - Eps * w0) * (E1 / w)
-        Mb[k] = (Eps * w0) * (diff / w)
-        Mc[k] = (Eps * w0 * fk) * (Ek / w)
-        Mabc[k] = Ma[k] + Mb[k] + Mc[k]
-
-        MaDenom[k] = QE[k] * (1 - Eps * w0)
-        MbDenom[k] = QE[k] * Eps * w0
-        McDenom[k] = QE[k] * Eps * w0 * fk
-
-        k = k + 1
-
-    Mean_Ma = integrate.simps(Ma * spectrum, energy) / integrate.simps(MaDenom * spectrum, energy)  # Mean gain path A
-    Mean_Mb = integrate.simps(Mb * spectrum, energy) / integrate.simps(MbDenom * spectrum, energy)  # Mean gain path B
-    Mean_Mc = integrate.simps(Mc * spectrum, energy) / integrate.simps(McDenom * spectrum, energy)
-
-    wA = np.float64(1 - (detector.material["xi"] * detector.material["omega"]))
-    wB = np.float64(detector.material["xi"] * detector.material["omega"])
-    wC = np.float64(detector.material["xi"] * detector.material["omega"])
-
-    return Mean_Ma, Mean_Mb, Mean_Mc, wA, wB, wC
-
-
-def parallel_gains_indirect(detector, energy, spectrum, fk, kV):
-    k = 0  # K is a counter from 0 to Max Energy
-    kbi = 1.1  # Make sure that the maximum energy bins is taken into account - from kbi to kVp through phosphor layers.
-    com_term = np.zeros(detector.thick)
-    Thickness = detector.thick
-    Density = detector.material["density"]
-    PF = detector.material["pf"]
-    Eps = detector.material["xi"]
-    m0 = detector.material["m0"]
-    Ek = detector.material["ek"]
-    QE = detector.get_QE(energy)
-
-    Ma = np.zeros(len(energy))
-    Mb = np.zeros(len(energy))
-    Mc = np.zeros(len(energy))
-    Mabc = np.zeros(len(energy))
-    MaDenom = np.zeros(len(energy))
-    MbDenom = np.zeros(len(energy))
-    McDenom = np.zeros(len(energy))
-
-    diffEnergy = float(energy[1] - energy[0])
-    com_e = np.zeros(len(energy))
-    for E1 in np.arange(kbi, kV + diffEnergy, diffEnergy):
-
-        if E1 < detector.material["ek"]:
-            w0 = 0.0
-            diff = 0.0
-
-        else:
-            if E1 >= detector.material["ek"]:
-                w0 = detector.material["omega"]
-                diff = E1 - detector.material["ek"]
-
-            for z in range(detector.thick):
-                """
-                The total Wiener spectrum is obtained by summing the quantum mottle component and screen structure mottle.
-                Accounting for variations in the spread of light emitted at from different depths in the screens.
-                """
-                # z = distance from a given layer to the output surface of the phosphor. Nesc= y0 +a1e^(-z/t1)
-                com_term[z] = np.exp(- detector.mu[k] * (Thickness - z) * 1e-4 * Density * PF) * (
-                        0.19497 + (0.59363 * np.exp(-z / 310.10304))) * (
-                                      1 - np.exp(- detector.mu[k] * 1.0 * 1e-4 * Density * PF))
-
-            """    
-            Path A: Light emitted locally, when no K x-ray is produced
-            Path B: Light emitted locally, when a K x-ray is produced
-            Path C: Light emitted remotely, when a K x-ray is produced
-            """
-            Ma[k] = integrate.simps(com_term, dx=1) * (1 - Eps * w0) * E1 * m0
-            Mb[k] = integrate.simps(com_term, dx=1) * (Eps * w0) * m0 * diff
-            Mc[k] = integrate.simps(com_term, dx=1) * (Eps * w0) * Ek * fk * m0
-            com_e[k] = integrate.simps(com_term, dx=1)
-            Mabc[k] = Ma[k] + Mb[k] + Mc[k]
-
-            MaDenom[k] = QE[k] * (1 - Eps * w0)
-            MbDenom[k] = QE[k] * Eps * w0
-            McDenom[k] = QE[k] * Eps * w0 * fk
-
-            k = k + 1
-
-        Mean_Ma = integrate.simps(Ma * spectrum, energy) / integrate.simps(MaDenom * spectrum, energy)
-        Mean_Mb = integrate.simps(Mb * spectrum, energy) / integrate.simps(MbDenom * spectrum, energy)
-        Mean_Mc = integrate.simps(Mc * spectrum, energy) / integrate.simps(McDenom * spectrum, energy)
-
-        wA = np.float64(1 - (detector.material["xi"] * detector.material["omega"]))
-        wB = np.float64(detector.material["xi"] * detector.material["omega"])
-        wC = np.float64(detector.material["xi"] * detector.material["omega"])
-
-    return Mean_Ma, Mean_Mb, Mean_Mc, wA, wB, wC
-
-
-def spread_direct(detector, signal):
-    t = detector.thick
-    l = detector.layer
-    f = signal.freq
-    tb = (t * np.sinh(2 * np.pi * f * (t - l) * 1e-3)) / ((t - l) * np.sinh(2 * np.pi * f * t * 1e-3))
-    tb[0] = 1
-    
-    return tb
-
-
-def spread_indirect(detector, signal):
-    f = signal.freq
-    H = detector.material["spread_coeff"]
-    osf = 1 / (1 + H * f + H * f ** 2 + H ** 2 * f ** 3)
-
-    return osf
 

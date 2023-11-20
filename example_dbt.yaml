@@ -19,8 +19,6 @@ source:
   filter: [(Rh, 0.057), (Be, 1)]
   external_filter: [(Al, 2), (Air, 636.5)]
 
-# acquisition geometry (?)
-
 # stages:
 #   selection
 #   parallel_gain
