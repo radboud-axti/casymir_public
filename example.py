@@ -4,6 +4,7 @@ import numpy as np
 from openpyxl import Workbook
 
 import casymir.casymir
+import casymir.processes
 
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -61,7 +62,7 @@ def run_model_dc(system, spec_name, kV, mAs, fit='Y'):
                                                                                              dtype=np.float64))
     # Stage 1: Selection by detector. Stochastic gain based on detector quantum efficiency, Bernoulli statistics
     sig.stochastic_gain(g1, np.sqrt(g1 * (1 - g1)), weight=1)
-    gA, gB, gC, wA, wB, wC = casymir.casymir.parallel_gains_direct(det, energy, spectrum, fk, kV)
+    gA, gB, gC, wA, wB, wC = casymir.processes.parallel_gains_direct(det, energy, spectrum, fk, kV)
     sig2A = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
     sig2B = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
     sig2C = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
@@ -79,7 +80,7 @@ def run_model_dc(system, spec_name, kV, mAs, fit='Y'):
     sig2 = casymir.casymir.Signal(sig.freq, sig2A.signal + sig2B.signal + sig2C.signal,
                                   sig2A.wiener + sig2B.wiener + sig2C.wiener + wienerBC)
     # Stage 3: stochastic blurring due to charge redistribution in Selenium (Tb)
-    tb = casymir.casymir.spread_direct(det, sig2)
+    tb = casymir.processes.spread_direct(det, sig2)
     sig2.stochastic_blur(tb, 1)
     # Signal at stage 3, after blurring due to charge redistribution/scintillator blurring
     sig3 = sig2
@@ -146,7 +147,7 @@ def run_model_ic(system, spec_name, kV, mAs, fit='Y'):
                                                                                              dtype=np.float64))
     # Stage 1: Selection by detector. Stochastic gain based on detector quantum efficiency, Bernoulli statistics
     sig.stochastic_gain(g1, np.sqrt(g1 * (1 - g1)), weight=1)
-    gA, gB, gC, wA, wB, wC = casymir.casymir.parallel_gains_indirect(det, energy, spectrum, fk, kV)
+    gA, gB, gC, wA, wB, wC = casymir.processes.parallel_gains_indirect(det, energy, spectrum, fk, kV)
     sig2A = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
     sig2B = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
     sig2C = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
@@ -165,7 +166,7 @@ def run_model_ic(system, spec_name, kV, mAs, fit='Y'):
                                   sig2A.wiener + sig2B.wiener + sig2C.wiener + wienerBC)
 
     # Stage 3: stochastic blurring by scintillator
-    tb = casymir.casymir.spread_indirect(det, sig2)
+    tb = casymir.processes.spread_indirect(det, sig2)
     sig2.stochastic_blur(tb, 1)
     # Signal at stage 3, after blurring due to charge redistribution/scintillator blurring
     sig3 = sig2
@@ -203,13 +204,13 @@ def run_model_ic(system, spec_name, kV, mAs, fit='Y'):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='CASYMIR demo script')
+    parser = argparse.ArgumentParser(description='CASYMIR standalone demo script')
 
     parser.add_argument('yaml_file', type=str, help='Path to System YAML file')
     parser.add_argument('spectrum_name', type=str, help='Name of the spectrum (e.g., LE for Low Energy)')
     parser.add_argument('kV', type=float, help='kV used to generate the spectrum')
     parser.add_argument('mAs', type=float, help='mAs used to generate the spectrum')
-    parser.add_argument('--output_file', '-op', type=str, default='ouptut.xlsx',
+    parser.add_argument('--output_file', '-of', type=str, default='ouptut.xlsx',
                         help='Path to output file. Default is "output.xlsx".')
 
     parser.add_argument('--print_fit', '-pf', choices=['Y', 'N'], default='N', help='Print fit parameters')
