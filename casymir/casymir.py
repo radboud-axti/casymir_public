@@ -12,13 +12,14 @@ from casymir import tk_general
 class Detector:
     # Detector class. Contains all dimensions and material. Material is a dictionary containing the properties.
     def __init__(self, det_type: str, yml_mat: str):
-        self.px_size = 0.085  # Pixel size
-        self.ff = 1  # Fill factor. For direct conversion aSe, its effectively 1.
-        self.pxa = (self.px_size ** 2) * self.ff  # Pixel area
+        self.px_size = 0  # Pixel size
+        self.ff = 0  # Fill factor. For direct conversion aSe, its effectively 1.
+        self.pxa = None  # Pixel area
         self.thick = 200  # Nominal detector layer thickness [um]
         self.layer = 7  # Charge collection layer thickness [um]. Optimizable parameter
         self.elems = 2816  # Detector elements
         self.add_noise = 0  # Additive noise. Optimizable parameter
+        self.QE = []
 
         self.mu = []  # Attenuation coefficients for given spectrum.
         self.components = []
@@ -91,7 +92,8 @@ class Detector:
     def get_QE(self, energy):
         # Calculates detector quantum efficiency
         self.get_mu(energy)
-        QE = 1 - np.exp(-(self.mu * self.thick * 1e-4 * self.material["density"]))
+        QE = 1 - np.exp(-(self.mu * self.thick * 1e-4 * self.material["density"] * self.material["pf"]))
+        self.QE = QE
         return QE
 
     def com_term_z(self, energy):
@@ -138,6 +140,9 @@ class System:
         self.description = self.yml_dict["description"]
         self.detector = self.yml_dict["detector"]
         self.source = self.yml_dict["source"]
+
+        self.detector["pxa"] = (self.detector["px_size"] ** 2) * self.detector["ff"]
+        # self.pxa = (self.detector["px_size"] ** 2) * self.detector["ff"]  # Pixel area
 
     def _load_sys_yml(self, yml_file: str):
         with open(yml_file, 'r') as stream:
@@ -187,7 +192,7 @@ class Spectrum:
             unique_mats.add(material)
         # TODO: update/place somewhere else for easier access
         mat_dictionary = {'Carbon Fiber': [1.9, 'C', 'Defined by Chemical Formula'],
-                          'Silica': [2.196, 'Si02', 'Defined by Chemical Formula']}
+                          'Silica': [2.196, 'SiO2', 'Defined by Chemical Formula']}
 
         print("Checking SpekPy materials... \n")
         for elem in unique_mats:

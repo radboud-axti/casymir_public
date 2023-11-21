@@ -173,6 +173,7 @@ def run_model_ic(system, spec_name, kV, mAs, fit='Y'):
     # Stage 4: optical coupling and deterministic blurring by pixel aperture function Ta
     g4 = det.material["ce"]
     ta = np.abs(np.sinc(det.px_size * det.ff * sig2.freq))
+    ta[0] = 1
     sig3.stochastic_gain(g4, (g4 * (1 - g4)) ** (1 / 2), 1)
     sig3.deterministic_blur(ta, 1)
     # Integrated signal at stage 4.

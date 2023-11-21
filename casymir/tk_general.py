@@ -40,7 +40,7 @@ def tk(mat: dict, n, f, seed=10):
     low = 0.0
     high = np.max(f)
     incr = f[1] - f[0]
-    dim = int((high / incr) + 1)
+    dim = int((high/incr))+1
     ms = (dim, 2)  # matrix size (256,2)
 
     tk_emission = np.zeros(ms)
@@ -194,7 +194,7 @@ def tk(mat: dict, n, f, seed=10):
     """
 
     for ir in range(nr):
-        r = (ir + 0.5) * dr;
+        r = (ir + 0.5) * dr
         shellvolume = 2.0 * np.pi * r * dr  # Per cm length of cylinder
         c_cyl[ir] = c_cyl[ir] / n_photons / shellvolume / mua  # Provides data in relative fluence rate (1/cm^2)
         c_cyl[ir] = c_cyl[ir] / 100  # To convert from 1/cm^2 to 1/mm^2
@@ -216,7 +216,7 @@ def tk(mat: dict, n, f, seed=10):
     Since the CSF is rotationally symmetric, the CSF can be written as 'csf_array' by using the J0 Bessel function.
     """
 
-    for mu in np.arange(low, high, incr):
+    for mu in np.linspace(low, high, num=dim, endpoint=True):
         csf_array[k] = 2 * np.pi * integrate.simps(CSF * (ss.j0(2 * np.pi * mu * finalrarray)) * finalrarray,
                                                    finalrarray)
         x_axis[k] = mu
