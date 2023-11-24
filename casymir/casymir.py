@@ -1,9 +1,9 @@
-from scipy import integrate
 from scipy.optimize import curve_fit
 import xraydb as xrdb
 import spekpy as sp
 import numpy as np
 import yaml
+from importlib import resources
 
 from casymir import fk_general
 from casymir import tk_general
@@ -154,6 +154,44 @@ class System:
                 print(err)
 
 
+def _create_matls() -> None:
+    """
+    Creates/overwrites custom SpekPy materials.
+
+    """
+    with resources.path("casymir.data", "user_matls.yaml") as yaml_file_path:
+        file_path = str(yaml_file_path)
+
+    with open(file_path, 'r') as stream:
+        try:
+            mat = yaml.safe_load(stream)
+            materials = mat.get("materials", [])
+
+            for material_data in materials:
+                name = material_data.get("name")
+                density = material_data.get("density")
+                formula = material_data.get("formula", "")
+                comment = material_data.get("comment", "")
+
+                composition = material_data.get("composition", {})
+
+                if isinstance(composition, list):
+                    composition_dict = {int(key): value for key, value in composition}
+                else:
+                    composition_dict = composition
+
+                if composition_dict:
+                    composition_list = [(element, weight) for element, weight in composition_dict.items()]
+                    sp.Spek.make_matl(matl_name=name, matl_density=density, wt_matl_comp=composition_list,
+                                      matl_comment=comment)
+                else:
+                    sp.Spek.make_matl(matl_name=name, matl_density=density, chemical_formula=formula,
+                                      matl_comment=comment)
+
+        except yaml.YAMLError as err:
+            print(err)
+
+
 class Spectrum:
     # Contains x-ray spectrum parameters and methods to derive relevant measurements
     def __init__(self, name, kV, mAs, detector, tube):
@@ -170,8 +208,7 @@ class Spectrum:
         s = sp.Spek(kvp=self.kV, mas=self.mAs, targ=self.tube.target, x=0, y=0, z=self.tube.SID,
                             th=self.th, dk=0.1)
 
-        # Check and create SpekPy materials before attempting to add filtration
-        self._check_matls()
+        _create_matls()
 
         s.multi_filter(filter_list=self.filter)
         s.multi_filter(filter_list=self.ext_filtration)
@@ -183,27 +220,6 @@ class Spectrum:
 
     def add_filtration(self, materials):
         self.spec.multi_filter(materials)
-
-    def _check_matls(self):
-        all_materials = self.filter + self.ext_filtration + self.det_filtration
-
-        unique_mats = set()
-        for material, thick in all_materials:
-            unique_mats.add(material)
-        # TODO: update/place somewhere else for easier access
-        mat_dictionary = {'Carbon Fiber': [1.9, 'C', 'Defined by Chemical Formula'],
-                          'Silica': [2.196, 'SiO2', 'Defined by Chemical Formula']}
-
-        print("Checking SpekPy materials... \n")
-        for elem in unique_mats:
-            try:
-                sp.Spek.show_matls(elem)
-            except:
-                name = elem
-                density = mat_dictionary[name][0]
-                formula = mat_dictionary[name][1]
-                comment = mat_dictionary[name][2]
-                sp.Spek.make_matl(matl_name=name, matl_density=density, chemical_formula=formula, matl_comment=comment)
 
     def get_hvl(self, coordinates):
         x = coordinates[0]
@@ -281,6 +297,5 @@ class Signal:
         print('MTF fit: a=%6.5f, b=%6.5f, c=%6.5f, d=%6.5f' % tuple(popt))
         print('NNPS fit: a=%4.3E, b=%4.3E, c=%4.3E, d=%4.3E, e=%4.3E' % tuple(popt2))
 
-    # Pending: add more robust signal processing routines.
 
 

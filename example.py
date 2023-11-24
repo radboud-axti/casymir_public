@@ -2,6 +2,7 @@ import argparse
 from scipy import integrate
 import numpy as np
 from openpyxl import Workbook
+from importlib import resources
 
 import casymir.casymir
 import casymir.processes
@@ -20,14 +21,12 @@ def print_intro():
 
 
 def save_to_excel(data, excel_path):
-    # Create a new workbook
+    headers = ["Frequency (1/mm)", "MTF", "NNPS"]
     wb = Workbook()
-    # Create a new sheet
     ws = wb.active
-    # Write data to the sheet
+    ws.append(headers)
     for row in data:
         ws.append(row.tolist())
-    # Save the workbook to the specified path
     wb.save(excel_path)
 
 
@@ -36,7 +35,10 @@ def run_model_dc(system, spec_name, kV, mAs, fit='Y'):
     material = sys.detector["active_layer"]
     name = sys.system_id
 
-    det = casymir.casymir.Detector(sys.detector["type"], "casymir/data/" + sys.detector["active_layer"] + ".yaml")
+    with resources.path("casymir.data", f'{material}.yaml') as yaml_file_path:
+        material_path = str(yaml_file_path)
+
+    det = casymir.casymir.Detector(sys.detector["type"], material_path)
     det.fill_from_dict(sys.detector)
 
     tube = casymir.casymir.Tube()
@@ -121,7 +123,10 @@ def run_model_ic(system, spec_name, kV, mAs, fit='Y'):
     material = sys.detector["active_layer"]
     name = sys.system_id
 
-    det = casymir.casymir.Detector(sys.detector["type"], "casymir/data/" + sys.detector["active_layer"] + ".yaml")
+    with resources.path("casymir.data", f'{material}.yaml') as yaml_file_path:
+        material_path = str(yaml_file_path)
+
+    det = casymir.casymir.Detector(sys.detector["type"], material_path)
     det.fill_from_dict(sys.detector)
 
     tube = casymir.casymir.Tube()

@@ -18,10 +18,3 @@ source:
   SID: 65.5
   filter: [(Rh, 0.057), (Be, 1)]
   external_filter: [(Al, 2), (Air, 636.5)]
-
-# stages:
-#   selection
-#   parallel_gain
-#   charge_redistribution
-#   pixel_aperture
-
