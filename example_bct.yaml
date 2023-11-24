@@ -18,11 +18,3 @@ source:
   SID: 95
   filter: [(Be, 1.4), (Al, 1.42), (Al, 0.044)]
   external_filter: [(Al, 10), (Air, 950)]
-
-# stages:
-#   selection
-#   parallel_gain
-#   scintillator_blur
-#   optical_coupling
-#   pixel_aperture
-

@@ -1,0 +1,445 @@
+1,2-Dichlorobenzene
+1,2-Dichloroethane
+1,3-Butadiene (Liquid)
+1,3-Butadiene
+1-Butene (Liquid)
+1-Butene
+A-150 Tissue-Equivalent Gas
+A-150 Tissue-Equivalent Plastic
+Ac
+Acetone
+Acetylene
+Adenine
+Adipose Tissue (ICRP)
+Adipose Tissue (ICRU)
+Adipose Tissue Substitute (AP-L2, Aqueous)
+Adipose Tissue Substitute (AP-SF1, Epoxy-based)
+Adipose Tissue Substitute (AP6, Epoxy-based)
+Ag
+Air Dry (Near Sea Level)
+Air-Equivalent Plastic (C-552)
+Air
+Al
+Alanine
+Aluminum Alloy (Type 1100)
+Aluminum Alloy (Type 2014)
+Aluminum Alloy (Type 6061)
+Aluminum Oxide
+Amber
+Ammonia
+Ammonium Formate
+Aniline
+Anthracene
+Ar
+As
+At
+Au
+B
+Ba
+Bakelite
+Barium Fluoride
+Barium Sulfate
+Be
+Benzene
+Beryllium Oxide
+Bi
+Bismuth Germanium Oxide
+Blood (ICRP)
+Blood, Whole (ICRU)
+Bone Substitute (SB3)
+Bone Substitute (SB5, Epoxy-based)
+Bone, Compact (ICRU)
+Bone, Cortical (ICRP)
+Bone, Cortical (ICRU)
+Bone-Equivalent Plastic (B-100)
+Bone-Equivalent Plastic (B-110)
+Boron Carbide
+Boron Oxide
+Br
+Brain (ICRP)
+Brain, Grey and White Matter (ICRU)
+Breast Tissue (ICRU)
+Breast Tissue Substitute (BR12, Epoxy-based)
+Breast Tissue Substitute (Griffith)
+Butane
+C
+Ca
+Cadmium Sulfide
+Cadmium Telluride
+Cadmium Tungstate
+Calcium Carbonate
+Calcium Fluoride
+Calcium Oxide
+Calcium Sulfate
+Calcium Tungstate
+Cameron Wax
+Carbon Dioxide
+Carbon Disulfide
+Carbon Monoxide
+Carbon Tetrachloride
+Cd
+Ce
+Cell Nucleus (ICRU)
+Cell Nucleus (Typical)
+Cellophane
+Cellulose Acetate (Cellophane)
+Cellulose Acetate Butyrate
+Cellulose Nitrate
+Cesium Chloride
+Cesium Fluoride
+Cesium Iodide
+Chlorobenzene
+Cl
+Co
+Concrete (Ordinary)
+Concrete (Ordinary, Type 03)
+Concrete (Ordinary, Type 04)
+Concrete Barite (Type BA)
+Concrete Limonite and Steel (Type LS)
+Concrete Magnetite (Type M)
+Concrete Magnetite and Steel (Type MS2)
+Concrete Serpentine (Type S)
+Concrete
+Copper Alloy (Admiralty Metal)
+Copper Alloy (Bell Metal)
+Copper Alloy (Cartridge Brass)
+Copper Alloy (Commercial Bronze)
+Copper Alloy (Commercial Leaded Bronze)
+Copper Alloy (Free Cutting Brass)
+Copper Alloy (Gunmetal)
+Copper Alloy (Low Brass)
+Copper Alloy (Manganese bronze)
+Copper Alloy (Muntzmetal)
+Copper Alloy (Naval Brass)
+Copper Alloy (Red Brass)
+Copper Alloy (Yellow Brass)
+Cr
+Cs
+Cu
+Cyclohexane
+Delrin
+Dichlorodiethyl Ether
+Diethyl Ether
+Dimethylsulf Oxide
+Dosimeter Solutiom, 0.015 M Ceric Ammonium Sulfate
+Dosimeter Solution, 0.0015 M Ceric+0.0030 M Cerous Sulfate
+Dosimeter Solution, 0.010 M Ceric+0.010 M Ceroussulfate
+Dosimeter Solution, 0.015 M Ceric+0.015 M Cerous Sulfate
+Dosimeter Solution, 0.020 M Cric Ammonium Sulfate
+Dosimeter Solution, Ethanol-Monochlorobenzene
+Dosimeter Solution, Ferrous Ammonium Sulfate (Standard Fricke)
+Dosimeter Solution, Ferrous Ammonium Sulfate (Super Fricke)
+Dosimeter Solution, Ferrous Sulfate (Standard Fricke)
+Dosimeter Solution, Ferrous Sulfate (Super Ficke)
+Dosimeter Solution, Potassium Dichromate (Standard)
+Dosimter Solution, Potassium Dichromate (Hi-Dose)
+Dy
+Er
+Ethane
+Ethoxyethanol
+Ethyl Acetate
+Ethyl Alcohol
+Ethyl Cellulose
+Ethyl Ether
+Ethylene Ethene
+Ethylene Glycol
+Eu
+Eye Lens (ICRP)
+Eye Lens (ICRU)
+F
+Fe
+Ferric Oxide
+Ferroboride
+Ferrous Oxide
+Fr
+Freon (12)
+Freon (12b2)
+Freon (13)
+Freon (13b1)
+Freon (13i1)
+GI-tract Intestine (ICRU)
+Ga
+Gadolinium Oxysulfide
+Gallium Arsenide
+Gd
+Ge
+Gel in Photographic Emulsion (Standard Nuclear)
+Glass (Lead)
+Glass (Plate)
+Glass Borosilicate (Corning Pyrex 7740)
+Glucose (Dextrose)
+Glutamine
+Glycerol
+Glyceryl Trioleate (Olein)
+Guanine
+Gypsum (Plaster of Paris)
+H
+He
+Heart, Blood Filled (ICRU)
+Hf
+Hg
+Ho
+Hydrogen Peroxide
+I
+In
+Ir
+K
+Kapton Polyimide Film
+Kapton
+Kidney (ICRU)
+Kovar
+Kr
+La
+Lanthanum Oxybromide
+Lanthanum Oxysulfide
+Lead Alloy (Babbitt Metal Pb and As-based)
+Lead Alloy (Babbitt Metal Pb-based)
+Lead Oxide
+Lexan
+Li
+Lincolnshire Bolus Muscle Substitute (ICRU)
+Lincolnshire Bolus Muscle Substitute
+Lipid Substitute (EVA-28)
+Lithium Amide
+Lithium Carbonate
+Lithium Fluoride
+Lithium Hydride
+Lithium Iodide
+Lithium Oxide
+Lithium Tetraborate
+Liver (ICRU)
+Lu
+Lung Inflated (ICRU)
+Lung Substitute (Alderson, Epoxy-based)
+Lung Substitute (Griffith, Polyurethane-based)
+Lung Substitute (LN10-75, Epoxy-based)
+Lung Tissue (ICRP)
+Lung Tissue (ICRU)
+Lymph (ICRU)
+Magnesium Carbonate
+Magnesium Fluoride
+Magnesium Orthosilicate (Powder)
+Magnesium Orthosilicate
+Magnesium Oxide
+Magnesium Tetraborate
+Mercuric Iodide
+Methane
+Methanol
+Mg
+Mn
+Mo
+Muscle Skeletal (ICRP)
+Muscle Skeletal (ICRU)
+Muscle Straiated (ICRU)
+Muscle Substitute (Alderson, Rubber-based Composition A)
+Muscle Substitute (Alderson, Rubber-based Composition B)
+Muscle Substitute (Griffith, Polyurethane-based)
+Muscle Substitute (RM-1, Polyethylene-based)
+Muscle-Equivalent Gel Frigerio et al (ICRU)
+Muscle-Equivalent Gel Frigerio et al
+Muscle-Equivalent Gel Rossi
+Muscle-Equivalent Liquid (Goodman Liquid)
+Muscle-Equivalent Liquid Frigerio et al
+Muscle-Equivalent Liquid Without Sucrose
+Muscle-Equivalent Liquid with Sucrose (Rossi Liquid)
+Mylar
+N,N-Dimethylformamide
+N-Butyl Alcohol
+N-Decane (Liquid)
+N-Decane
+N-Heptane (Liquid)
+N-Heptane
+N-Heptyne (Liquid)
+N-Heptyne
+N-Hexane (Liquid)
+N-Hexane
+N-Hexyne (Liquid)
+N-Hexyne
+N-Nonane (Liquid)
+N-Nonane
+N-Pentane (Liquid)
+N-Pentane
+N-Pentyne (Liquid)
+N-Pentyne
+N-Propyl Alcohol
+N
+Na
+Napthalene
+Nb
+Nckel Alloy (Hastelloy B)
+Nd
+Ne
+Ni
+Nickel Alloy (Iconel)
+Nickel Alloy (Monel)
+Nickel Alloy (Mumetal)
+Nickel Alloy (Nichrome)
+Nitrobenzene
+Nitrocellulose
+Nitrous Oxide
+Nylon (Dupont Elvamide 8062M)
+Nylon (Rislan, Type 11)
+Nylon (Type 6 And Type 66)
+Nylon (Type 6-10)
+O
+Octane Liquid
+Octane
+Os
+Ovary (ICRU)
+P
+Pa
+Pancreas (ICRU)
+Pb
+Pd
+Perspex
+Photographic Emulsion (Kodak Type AA And M)
+Photographic Emulsion (Standard Nuclear)
+Photographic Emulsion, Silverhalidesin (Standard Nuclear)
+Plastic Scintillator (Vinyltoluene-based)
+Plutonium Dioxide
+Pm
+Po
+Polyacrylonitrile
+Polybromostyrene
+Polycarbonate (Makrolon or Lexan)
+Polychlorostyrene
+Polyethylene Terephthalate (Mylar)
+Polyethylene
+Polymethyl Methacrylate (Lucite Perspex or Plexiglas)
+Polyoxymethylene (Delrin)
+Polypropylene
+Polystyrene
+Polytetrafluoroethylene (Teflon)
+Polytrifluorochloroethylene
+Polyurethane
+Polyvinyl Acetate
+Polyvinyl Alcohol
+Polyvinyl Butyral
+Polyvinyl Chloride
+Polyvinyl Pyrrolidone
+Polyvinylidene Chloride (Saran)
+Polyvinylidene Fluoride (Kynar)
+Potassium Iodide
+Potassium Oxide
+Pr
+Propane (Liquid)
+Propane
+Propylene Propene (Liquid)
+Propylene Propene
+Pt
+Pyridine
+Ra
+Radiochromicdye Film (Nylon-based)
+Rb
+Re
+Red Marrow Skeletal (ICRU)
+Red Marrow Substitute (RM-G1, Water-based Gel)
+Red Marrow Substitute (RM-L3, Aqueous)
+Red Marrow Substitute (RM-SR4, Epoxy-based)
+Rh
+Rice Powder
+Rn
+Ru
+Rubber (Butyl)
+Rubber (Natural)
+Rubber (Neoprene)
+S
+Sb
+Sc
+Se
+Si
+Silicon Dioxide (Quartz)
+Silicon Dioxide
+Silicon Nitride
+Silver Bromide
+Silver Chloride
+Silver Iodide
+Skeletal Cartilage (ICRU)
+Skeletal Spongiosa (ICRU)
+Skin (ICRP)
+Skin (ICRU)
+Skin Substitute (SK2, Polyethylene-based 1.09g_cm-3)
+Skin Substitute (SK2, Polyethylene-based 1.19g_cm-3)
+Sm
+Sn
+Sodium Carbonate
+Sodium Chloride
+Sodium Dioxide
+Sodium Monoxide
+Sodium Nitrate
+Soil (Typicalloam Seltzer)
+Solder Plumber (50-50)
+Solder Soft (40-60)
+Solder Soft (67-33)
+Spleen (ICRU)
+Sr
+Steel, Stainless (Type 302)
+Steel, Stainless (Type 316l)
+Stilbene
+Sucrose
+Ta
+Tb
+Tc
+Te
+Teflon
+Temex Muscle Substitute (Rubber-based)
+Terphenyl
+Testes (ICRP)
+Testes (ICRU)
+Tetrachloroethylene
+Th
+Thalliumchloride
+Thyroid (ICRU)
+Thyroid Substitute (TH-L2, Aqueous)
+Ti
+Tissue Substitute (MS20)
+Tissue, Soft (ICRP)
+Tissue, Soft Four Component (ICRU)
+Tissue-Equivalent Gas (Ethylene Ethane-based)
+Tissue-Equivalent Gas (Hydrogen-based)
+Tissue-Equivalent Gas (Methane-based)
+Tissue-Equivalent Gas (Propane-based)
+Titanium Dioxide
+Tl
+Tm
+Toluene
+Trichloroethylene
+Trichloromethane (Chloroform)
+Triethyl Phosphate
+Tungsten Alloy (Mallory 2000)
+Tungsten Alloy (Type A2)
+Tungsten Alloy (Type B2)
+Tungsten Alloy (Type C2)
+Tungsten Hexafluoride
+U
+Uranium Dicarbide
+Uranium Monocarbide
+Uranium Oxide
+Uranyliodate Alpha
+Urea
+V
+Valine
+Viton Fluoroelastomer
+W
+WT1 Water Substitute (Epoxy-based)
+Water Substitute (RW-1, Polyethene-based)
+Water, Liquid 75
+Water, Liquid 78
+Water, Liquid
+Water, Vapor
+Water
+Wax, M3
+Wax, Mix D
+Wax, Paraffin (ICRU)
+Wax, Paraffin
+Witt Liquid
+Xe
+Xylene
+Y
+Yb
+Yellow Marrow, Skeletal (ICRU)
+Zinc Sulfide
+Zircaloy-2
+Zircaloy-4
+Zn
+Zr
