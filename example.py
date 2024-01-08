@@ -1,9 +1,7 @@
 import argparse
-from scipy import integrate
 import numpy as np
 from openpyxl import Workbook
 from importlib import resources
-
 import casymir.casymir
 import casymir.processes
 
@@ -35,7 +33,7 @@ def run_model_dc(system, spec_name, kV, mAs, fit='Y'):
     material = sys.detector["active_layer"]
     name = sys.system_id
 
-    with resources.path("casymir.data", f'{material}.yaml') as yaml_file_path:
+    with resources.path("casymir.data.detectors", f'{material}.yaml') as yaml_file_path:
         material_path = str(yaml_file_path)
 
     det = casymir.casymir.Detector(sys.detector["type"], material_path)
@@ -47,72 +45,19 @@ def run_model_dc(system, spec_name, kV, mAs, fit='Y'):
     print("\nPCM for " + name + '\n')
 
     spec = casymir.casymir.Spectrum(name=spec_name, kV=kV, mAs=mAs, detector=det, tube=tube)
-    energy, spectrum = spec.get_incident_spec()
 
-    # Get probability of K reabsorption (fk) and blurring due to remote absorption (Tk)
-    fk = det.calculate_fk()
-    f, tk = det.calculate_Tk()
-    # Get quantum efficiency of detector
-    QE = det.get_QE(energy)
-
-    spec_norm = spectrum / integrate.simps(spectrum, energy)
-    # Mean quantum efficiency:
-    g1 = integrate.simps(QE * spec_norm, energy)
-    # Stage 0: starting signal and its wiener spectrum is q0 = number of photons per unit area
-    q0 = spec.get_fluence()
-    sig = casymir.casymir.Signal(f, q0 * np.ones(np.size(f), dtype=np.float64), q0 * np.ones(np.size(f),
-                                                                                             dtype=np.float64))
-    # Stage 1: Selection by detector. Stochastic gain based on detector quantum efficiency, Bernoulli statistics
-    sig.stochastic_gain(g1, np.sqrt(g1 * (1 - g1)), weight=1)
-    gA, gB, gC, wA, wB, wC = casymir.processes.parallel_gains_direct(det, energy, spectrum, fk, kV)
-    sig2A = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
-    sig2B = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
-    sig2C = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
-    # Path A: stochastic gain gA, Poisson statistics -> var_gA = gA
-    # Path B: stochastic gain gB, Poisson statistics -> var_gB = gB
-    sig2A.stochastic_gain(gA, gA ** (1 / 2), wA)
-    sig2B.stochastic_gain(gB, gB ** (1 / 2), wB)
-    # Probability of remote reabsorption is fk and probability of whole path C occurring is wC
-    # Path C:
-    sig2C.stochastic_blur(tk, wC * fk)
-    sig2C.stochastic_gain(gC, gC ** (1 / 2), 1)
-    # Cross wiener spectrum for B & C processes:
-    wienerBC = 2 * wB * tk * fk * gB * gC * sig.wiener
-    # Putting paths A, B and C together:
-    sig2 = casymir.casymir.Signal(sig.freq, sig2A.signal + sig2B.signal + sig2C.signal,
-                                  sig2A.wiener + sig2B.wiener + sig2C.wiener + wienerBC)
-    # Stage 3: stochastic blurring due to charge redistribution in Selenium (Tb)
-    tb = casymir.processes.spread_direct(det, sig2)
-    sig2.stochastic_blur(tb, 1)
-    # Signal at stage 3, after blurring due to charge redistribution/scintillator blurring
-    sig3 = sig2
-    # Stage 4: deterministic blurring by pixel aperture function Ta
-    ta = np.abs(np.sinc(det.px_size * det.ff * sig2.freq))
-    sig3.deterministic_blur(ta, 1)
-    # Integrated signal at stage 4.
-    sig4 = casymir.casymir.Signal(sig3.freq, sig3.signal * det.pxa, sig3.wiener * (det.pxa ** 2))
-    # MTF
-    mtf = sig4.signal / sig4.signal[0]
-    # Aliased NPS (up to fNY):
-    sig4.resample()
-
-    add_noise = det.add_noise
-
-    nps = sig4.wiener[0:int(np.size(sig4.freq) / 2)] + ((add_noise ** 2) * det.pxa)
-    f2 = sig4.freq[0:int(np.size(sig4.freq) / 2)]
-    mtf = mtf[0:int(np.size(sig4.freq) / 2)]
-    # Normalized NPS
-    nnps = nps / (sig4.signal[0] ** 2)
-
-    sig4.mtf = mtf
-    sig4.nnps = nnps
+    sig = casymir.processes.initial_signal(det, spec)
+    sig2 = casymir.processes.quantum_selection(det, spec, sig)
+    sig3 = casymir.processes.parallel_gain_direct(det, spec, sig2)
+    sig4 = casymir.processes.spread_direct(det, sig3)
+    sig5 = casymir.processes.px_integration(det, sig4)
 
     if fit == 'Y':
         print("\n*********************************************************")
         print("Fit Results:\n")
-        sig4.fit()
+        sig5.fit()
 
-    results = np.array([f2, mtf, nnps])
+    results = np.array([sig5.freq, sig5.mtf, sig5.nnps])
     results = np.transpose(results)
 
     return results
@@ -123,7 +68,7 @@ def run_model_ic(system, spec_name, kV, mAs, fit='Y'):
     material = sys.detector["active_layer"]
     name = sys.system_id
 
-    with resources.path("casymir.data", f'{material}.yaml') as yaml_file_path:
+    with resources.path("casymir.data.detectors", f'{material}.yaml') as yaml_file_path:
         material_path = str(yaml_file_path)
 
     det = casymir.casymir.Detector(sys.detector["type"], material_path)
@@ -132,78 +77,23 @@ def run_model_ic(system, spec_name, kV, mAs, fit='Y'):
     tube = casymir.casymir.Tube()
     tube.fill_from_dict(sys.source)
 
-    print("\nPCM for " + name)
+    print("\nPCM for " + name + '\n')
 
     spec = casymir.casymir.Spectrum(name=spec_name, kV=kV, mAs=mAs, detector=det, tube=tube)
-    energy, spectrum = spec.get_incident_spec()
 
-    # Get probability of K reabsorption (fk) and blurring due to remote absorption (Tk)
-    fk = det.calculate_fk()
-    f, tk = det.calculate_Tk()
-    # Get quantum efficiency of detector
-    QE = det.get_QE(energy)
-
-    spec_norm = spectrum / integrate.simps(spectrum, energy)
-    # Mean quantum efficiency:
-    g1 = integrate.simps(QE * spec_norm, energy)
-    # Stage 0: starting signal and its wiener spectrum is q0 = number of photons per unit area
-    q0 = spec.get_fluence()
-    sig = casymir.casymir.Signal(f, q0 * np.ones(np.size(f), dtype=np.float64), q0 * np.ones(np.size(f),
-                                                                                             dtype=np.float64))
-    # Stage 1: Selection by detector. Stochastic gain based on detector quantum efficiency, Bernoulli statistics
-    sig.stochastic_gain(g1, np.sqrt(g1 * (1 - g1)), weight=1)
-    gA, gB, gC, wA, wB, wC = casymir.processes.parallel_gains_indirect(det, energy, spectrum, fk, kV)
-    sig2A = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
-    sig2B = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
-    sig2C = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
-    # Path A: stochastic gain gA, Poisson statistics -> var_gA = gA
-    # Path B: stochastic gain gB, Poisson statistics -> var_gB = gB
-    sig2A.stochastic_gain(gA, gA ** (1 / 2), wA)
-    sig2B.stochastic_gain(gB, gB ** (1 / 2), wB)
-    # Probability of remote reabsorption is fk and probability of whole path C occurring is wC
-    # Path C:
-    sig2C.stochastic_blur(tk, wC * fk)
-    sig2C.stochastic_gain(gC, gC ** (1 / 2), 1)
-    # Cross wiener spectrum for B & C processes:
-    wienerBC = 2 * wB * tk * fk * gB * gC * sig.wiener
-    # Putting paths A, B and C together:
-    sig2 = casymir.casymir.Signal(sig.freq, sig2A.signal + sig2B.signal + sig2C.signal,
-                                  sig2A.wiener + sig2B.wiener + sig2C.wiener + wienerBC)
-
-    # Stage 3: stochastic blurring by scintillator
-    tb = casymir.processes.spread_indirect(det, sig2)
-    sig2.stochastic_blur(tb, 1)
-    # Signal at stage 3, after blurring due to charge redistribution/scintillator blurring
-    sig3 = sig2
-    # Stage 4: optical coupling and deterministic blurring by pixel aperture function Ta
-    g4 = det.material["ce"]
-    ta = np.abs(np.sinc(det.px_size * det.ff * sig2.freq))
-    ta[0] = 1
-    sig3.stochastic_gain(g4, (g4 * (1 - g4)) ** (1 / 2), 1)
-    sig3.deterministic_blur(ta, 1)
-    # Integrated signal at stage 4.
-    sig4 = casymir.casymir.Signal(sig3.freq, sig3.signal * det.pxa, sig3.wiener * (det.pxa ** 2))
-    # MTF
-    mtf = sig4.signal / sig4.signal[0]
-    # Aliased NPS (up to fNY):
-    sig4.resample()
-    add_noise = det.add_noise
-
-    nps = sig4.wiener[0:int(np.size(sig4.freq) / 2)] + ((add_noise ** 2) * det.pxa)
-    f2 = sig4.freq[0:int(np.size(sig4.freq) / 2)]
-    mtf = mtf[0:int(np.size(sig4.freq) / 2)]
-    # Normalized NPS
-    nnps = nps / (sig4.signal[0] ** 2)
-
-    sig4.mtf = mtf
-    sig4.nnps = nnps
+    sig = casymir.processes.initial_signal(det, spec)
+    sig2 = casymir.processes.quantum_selection(det, spec, sig)
+    sig3 = casymir.processes.parallel_gain_indirect(det, spec, sig2)
+    sig4 = casymir.processes.spread_indirect(det, sig3)
+    sig5 = casymir.processes.optical_coupling(det, sig4)
+    sig6 = casymir.processes.px_integration(det, sig5)
 
     if fit == 'Y':
         print("\n*********************************************************")
         print("Fit Results:\n")
-        sig4.fit()
+        sig6.fit()
 
-    results = np.array([f2, mtf, nnps])
+    results = np.array([sig6.freq, sig6.mtf, sig6.nnps])
     results = np.transpose(results)
 
     return results
