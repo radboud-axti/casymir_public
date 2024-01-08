@@ -1,12 +1,6 @@
 import numpy as np
 from scipy import integrate
 
-"""
-Fractional energy deposition calculated for each photon - modified for amorphous Selenium detector.
-The energy deposition due to secondary processes will be neglected,except for the reabsorption of 
-the K-fluorescence x-rays emitted from the detector layer following photoelectric interaction.
-"""
-
 
 def fk(thickness: float, mat: dict, w_hZ=1):
     """
@@ -48,9 +42,9 @@ def fk(thickness: float, mat: dict, w_hZ=1):
     Pix = np.zeros(n)  # Absorption probability for a K-alpha or K-beta photon originating from the ith layer
 
     """
-    The screen is asummed to be a uniform medium of infinite area and thickness L. 
+    The active layer is asummed to be a uniform medium of infinite area and thickness L. 
     The medium is subdivided into n layers, each of thickness deltaL. 
-    First, it is calculated  the absorption probability for a K-alpha or K-beta photon originating from the ith layer, Pix.
+    First, the absorption probability for a K-alpha or K-beta photon originating from the ith layer, Pix.
     The solid angle 4pi subtended at the centrre of the later is divided into 2m solid-angle elements. 
     The jth solid-angle element is obtained from integration of the solid angle between the (j-1)th and jth polar angles.
     Then, assuming that fluorescence photons are emitted isotropically and that the K photon is totally absorbed,
@@ -104,8 +98,8 @@ def fk(thickness: float, mat: dict, w_hZ=1):
 
     """
     Where:
-    - w_hZ is the fractional weight of the high-Z element in the phosphor,
-    - mu_mass_abs is the probability that an intereaction will be a photoelectric event with the high-Z element of energy E,
+    - w_hZ is the fractional weight of the high-Z element in the active layer,
+    - mu_mass_abs is the probability that an intereaction will be a photoelectric event,
     - xi is the K-shell contribution to the photoelectric effect,
     - omega is the K-fluorescent yield
     - Ix is the relative frequency of K-alpha or K-beta x-ray production

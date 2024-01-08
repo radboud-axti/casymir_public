@@ -1,3 +1,22 @@
+"""
+casymir.casymir
+~~~~~~~~~~~
+
+This module defines the main classes for the CASYMIR package.
+
+Classes:
+
+- Detector: Contains the characteristics and parameters of the detector.
+
+- Tube: Contains relevant parameters for the X-ray source.
+
+- System: Represents the overall system configuration.
+
+- Spectrum: Manages X-ray spectrum parameters and derived measurements.
+
+- Signal: Stores frequency vector, magnitude, and wiener spectrum for the propagated signals.
+"""
+
 from scipy.optimize import curve_fit
 import xraydb as xrdb
 import spekpy as sp
@@ -10,23 +29,22 @@ from casymir import tk_general
 
 
 class Detector:
-    # Detector class. Contains all dimensions and material. Material is a dictionary containing the properties.
     def __init__(self, det_type: str, yml_mat: str):
-        self.px_size = 0  # Pixel size
-        self.ff = 0  # Fill factor. For direct conversion aSe, its effectively 1.
-        self.pxa = None  # Pixel area
-        self.thick = 200  # Nominal detector layer thickness [um]
-        self.layer = 7  # Charge collection layer thickness [um]. Optimizable parameter
-        self.elems = 2816  # Detector elements
+        self.px_size = 0    # Pixel size
+        self.ff = 0         # Fill factor. For direct conversion aSe, its effectively 1.
+        self.pxa = None     # Pixel area
+        self.thick = 200    # Nominal detector layer thickness [um]
+        self.layer = 7      # Charge collection layer thickness [um]. Optimizable parameter
+        self.elems = 2816   # Detector elements
         self.add_noise = 0  # Additive noise. Optimizable parameter
-        self.QE = []
+        self.QE = []        # Detector Quantum Efficiency
 
-        self.mu = []  # Attenuation coefficients for given spectrum.
-        self.components = []
-        self.type = det_type
-        self.material = {}
-        self.active_layer = " "
-        self.extra_materials = []
+        self.mu = []            # Attenuation coefficients for given spectrum.
+        self.components = []    # Active layer elemental composition
+        self.type = det_type    # Detector type (direct or indirect conversion)
+        self.material = {}      # Dictionary containing physical properties of the active layer material
+        self.active_layer = " "     # Active layer material name
+        self.extra_materials = []   # Extra materials such as detector covers
 
         self._load_yml(yml_file=yml_mat)
 
@@ -69,14 +87,12 @@ class Detector:
 
     def calculate_Tk(self):
         # Calculates blurring due to K-fluorescence reabsorption in detector
-        # As Tk depends on the frequency, the frequency vector is also returned
-        n = int(self.elems / 2)  # N° of elements within the freq range of 0 to Nyq (detector size is 2816)
-        R = np.arange(2 * n)  # length of the array
-        f = R / (self.px_size * (2 * n))  # Spatial frequency cycles/mm
+        n = int(self.elems / 2)             # Number of elements within the freq range (0 to f_nyquist)
+        R = np.arange(2 * n)                # Array length
+        f = R / (self.px_size * (2 * n))    # Spatial frequency vector [1/mm]
         csf = tk_general.tk(self.material, n, f)
         tk = csf[:, 1] / np.max(csf[:, 1])  # Normalized result
-        freq = csf[:, 0]  # Frequency vector
-        return freq, tk
+        return tk
 
     def get_mu(self, energy):
         # Populates attenuation coefficient given the energy vector
@@ -108,13 +124,13 @@ class Detector:
 
 
 class Tube:
-    # Relevant tube parameters: angle, material and source-image distance
+    # Relevant x-ray source parameters
     def __init__(self):
-        self.target_angle = 25
-        self.target = 'W'
-        self.SID = 65
-        self.filter = []
-        self.external_filter = []
+        self.target_angle = 25  # Anode angle [degrees]
+        self.target = 'W'       # Anode material
+        self.SID = 65           # Source to Image Distance [cm]
+        self.filter = []        # List of internal filters
+        self.external_filter = []   # List of external filters
 
     def fill_from_dict(self, props: dict):
         for attr_name, value in props.items():
@@ -130,19 +146,22 @@ class Tube:
 
 
 class System:
+    """
+    Contains all the information needed to run the system parallel cascaded model. The Detector and Tube objects
+    are created using the System attributes.
+    """
     def __init__(self, yml_sys: str):
-        self.system_id = " "
-        self.description = " "
-        self.detector = {}
-        self.source = {}
-        self.yml_dict = self._load_sys_yml(yml_file=yml_sys)
+        self.system_id = " "    # System name
+        self.description = " "  # System description
+        self.detector = {}      # Dictionary containing all the detector parameters. Used to create Detector object.
+        self.source = {}        # Dictionary containing all the x-ray source parameters. Used to create Tube object.
+        self.yml_dict = self._load_sys_yml(yml_file=yml_sys)    # Dictionary containing all System information
         self.system_id = self.yml_dict["system_id"]
         self.description = self.yml_dict["description"]
         self.detector = self.yml_dict["detector"]
         self.source = self.yml_dict["source"]
 
         self.detector["pxa"] = (self.detector["px_size"] ** 2) * self.detector["ff"]
-        # self.pxa = (self.detector["px_size"] ** 2) * self.detector["ff"]  # Pixel area
 
     def _load_sys_yml(self, yml_file: str):
         with open(yml_file, 'r') as stream:
@@ -159,37 +178,38 @@ def _create_matls() -> None:
     Creates/overwrites custom SpekPy materials.
 
     """
-    with resources.path("casymir.data", "user_matls.yaml") as yaml_file_path:
-        file_path = str(yaml_file_path)
+    folder_path = resources.files("casymir.data.materials")
 
-    with open(file_path, 'r') as stream:
-        try:
-            mat = yaml.safe_load(stream)
-            materials = mat.get("materials", [])
+    for material_file in resources.contents("casymir.data.materials"):
+        if material_file.endswith(".yaml"):
+            with folder_path.joinpath(material_file).open('r') as stream:
+                try:
+                    mat = yaml.safe_load(stream)
+                    materials = mat.get("material", [])
 
-            for material_data in materials:
-                name = material_data.get("name")
-                density = material_data.get("density")
-                formula = material_data.get("formula", "")
-                comment = material_data.get("comment", "")
+                    for material_data in materials:
+                        name = material_data.get("name")
+                        density = material_data.get("density")
+                        formula = material_data.get("formula", "")
+                        comment = material_data.get("comment", "")
 
-                composition = material_data.get("composition", {})
+                        composition = material_data.get("composition", {})
 
-                if isinstance(composition, list):
-                    composition_dict = {int(key): value for key, value in composition}
-                else:
-                    composition_dict = composition
+                        if isinstance(composition, list):
+                            composition_dict = {int(key): value for key, value in composition}
+                        else:
+                            composition_dict = composition
 
-                if composition_dict:
-                    composition_list = [(element, weight) for element, weight in composition_dict.items()]
-                    sp.Spek.make_matl(matl_name=name, matl_density=density, wt_matl_comp=composition_list,
-                                      matl_comment=comment)
-                else:
-                    sp.Spek.make_matl(matl_name=name, matl_density=density, chemical_formula=formula,
-                                      matl_comment=comment)
+                        if composition_dict:
+                            composition_list = [(element, weight) for element, weight in composition_dict.items()]
+                            sp.Spek.make_matl(matl_name=name, matl_density=density, wt_matl_comp=composition_list,
+                                              matl_comment=comment)
+                        else:
+                            sp.Spek.make_matl(matl_name=name, matl_density=density, chemical_formula=formula,
+                                              matl_comment=comment)
 
-        except yaml.YAMLError as err:
-            print(err)
+                except yaml.YAMLError as err:
+                    print(err)
 
 
 class Spectrum:
@@ -202,7 +222,9 @@ class Spectrum:
         self.det_filtration = detector.extra_materials  # Tuple list containing material and thickness
         self.filter = tube.filter
         self.ext_filtration = tube.external_filter
-        self.spec = []
+        self.spec = []  # SpekPy spectrum object
+        self.energy = []    # Energy vector (keV)
+        self.fluence = []   # Fluence corresponding to the energy vector, per cm2 per keV
         self.tube = tube
 
         s = sp.Spek(kvp=self.kV, mas=self.mAs, targ=self.tube.target, x=0, y=0, z=self.tube.SID,
@@ -217,6 +239,9 @@ class Spectrum:
         s.multi_filter(filter_list=self.det_filtration)
 
         self.spec = s
+        energy, fluence = s.get_spectrum(edges=False, flu=True, diff=False, x=0, y=0, z=self.tube.SID)
+        self.energy = energy
+        self.fluence = fluence
 
     def add_filtration(self, materials):
         self.spec.multi_filter(materials)
@@ -249,7 +274,7 @@ class Spectrum:
 
 class Signal:
     # Signal class stores frequency vector, signal and its wiener spectrum. Contains methods to add deterministic and
-    # stochastic blurring and gain stages. Other specific signal processing methods can be added later.
+    # stochastic blurring and gain stages.
     def __init__(self, freq, signal, wiener):
         self.signal = signal
         self.wiener = wiener
@@ -288,11 +313,11 @@ class Signal:
         def poly4_2(x, m, a, b, c, d):
             return m + a * x + b * (x ** 2) + c * (x ** 3) + d * (x ** 4)
 
-        freq2 = self.freq[0:int(np.size(self.freq) / 2)]
+        # freq2 = self.freq[0:int(np.size(self.freq) / 2)]
 
-        popt, pcov = curve_fit(poly4, freq2, self.mtf)
+        popt, pcov = curve_fit(poly4, self.freq, self.mtf)
 
-        popt2, pcov2 = curve_fit(poly4_2, freq2, self.nnps)
+        popt2, pcov2 = curve_fit(poly4_2, self.freq, self.nnps)
 
         print('MTF fit: a=%6.5f, b=%6.5f, c=%6.5f, d=%6.5f' % tuple(popt))
         print('NNPS fit: a=%4.3E, b=%4.3E, c=%4.3E, d=%4.3E, e=%4.3E' % tuple(popt2))
