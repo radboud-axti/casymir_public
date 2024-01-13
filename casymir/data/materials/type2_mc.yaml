@@ -1,0 +1,9 @@
+material:
+  - name: Type II MC
+    density: 3.16
+    composition:
+      20: 0.398936
+      15: 0.184987
+      8: 0.41407
+      1: 0.002007
+    comment: Type II breast microcalcification (Calcium Hydroxyapatite), defined by material weights

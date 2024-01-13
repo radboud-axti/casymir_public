@@ -1,0 +1,5 @@
+material:
+  - name: Silica
+    density: 2.196
+    formula: SiO2
+    comment: Custom material 2, defined by chemical formula
