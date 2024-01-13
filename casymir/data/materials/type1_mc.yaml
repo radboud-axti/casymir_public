@@ -1,0 +1,9 @@
+material:
+  - name: Type I MC
+    density: 2.2
+    composition:
+      20: 0.244188
+      6: 0.146358
+      8: 0.584889
+      1: 0.024565
+    comment: Type I breast microcalcification (Calcium Oxalate), defined by material weights

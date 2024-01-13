@@ -1,0 +1,5 @@
+material:
+  - name: Carbon Fiber
+    density: 1.9
+    formula: C
+    comment: Custom material 1, defined by chemical formula
