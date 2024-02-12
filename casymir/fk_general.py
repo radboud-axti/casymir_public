@@ -1,27 +1,33 @@
+"""
+Probability for K-fluorescence reabsorption within the detector active layer.
+
+Original implemetation for scintillator detectors by J.J. Pautasso, adapted by G. Pacheco
+"""
 import numpy as np
 from scipy import integrate
 
 
-def fk(thickness: float, mat: dict, w_hZ=1):
+def fk(thickness: float, mat: dict, w_hZ: float = 1) -> float:
     """
-    @param thickness: thickness [um] of detector layer
-    @param mat: dictionary containing material information.
-    @param w_hZ: fractional weight of the high-Z element (only applies for phosphors)
-    @return: fk - fraction of K-fluorescence reabsorbed
+    Calculates the probability for k-fluorescence reabsorption within the detector active layer.
+
+    :param thickness: thickness [um] of detector layer
+    :param mat: dictionary containing material information.
+    :param w_hZ: fractional weight of the high-Z element (only applies for phosphors)
+    :return: fk - fraction of K-fluorescence reabsorbed
     """
     density = mat["density"]
     PF = mat["pf"]
     xi = mat["xi"]
     omega = mat["omega"]
 
-    theta = 0  # Incident x-ray angle. Equal to the polar angle of the photon as it exits from the phantom.
+    theta = 0
 
     # Mass absorption coefficients obtained from http://physics.nist.gov/PhysRefData/FFast/html/form.html
-
     mu_mass_abs = mat["mu_mass_abs"]  # Photoelectric mass absorption coeff in cm²/g at k_energy for detector material
     mu_mass_tot = mat["mu_mass_tot"]  # Total mass absorption coeff in cm²/g at k_energy for detector material
 
-    L = thickness * 1e-4 * density * PF  # Phosphor coating density (g/cm²)
+    L = thickness * 1e-4 * density * PF  # Active layer density (g/cm²)
     n = int(L * 700)  # Number of layers
     deltaL = L / n  # L per layer
     Ix = 1  # Relative frequency of k-alpha and k-beta
@@ -31,14 +37,14 @@ def fk(thickness: float, mat: dict, w_hZ=1):
     high = 2.0 * m  # Upper limit
     inc = 0.001 * np.pi  # Step size
 
-    max_count = int((high - low) / inc) + 1  # To determine the dimension
+    max_count = int((high - low) / inc) + 1
 
     P1 = np.zeros(max_count)
     P2 = np.zeros(max_count)
     P0 = np.zeros(max_count)
     solid_angle = np.zeros(max_count)
     Layers = np.zeros(n)
-    eta = np.pi / (2 * m)  # delta n
+    eta = np.pi / (2 * m)
     Pix = np.zeros(n)  # Absorption probability for a K-alpha or K-beta photon originating from the ith layer
 
     """
@@ -81,9 +87,8 @@ def fk(thickness: float, mat: dict, w_hZ=1):
         """
 
         Pix[i] = integrate.simps(P0, solid_angle)
-        # Pix[i] = np.trapz(P0, solid_angle)
 
-        # PF calculation
+    # PF calculation
     PF1 = np.zeros(n)
     PF2 = np.zeros(n)
     PF3 = np.zeros(n)
@@ -119,8 +124,6 @@ def fk(thickness: float, mat: dict, w_hZ=1):
     Summation of a PFix over the n layers yields the total probability of Kx fluorescence, PFx.
     And the probability of Kx reabsorption per Kx photon emitted, fk, is given by:
     """
-    # Pfinal calculation
-    fk = integrate.simps(Pix * PF3) / integrate.simps(PF3)
-    # fk = np.trapz(Pix * PF3) / np.trapz(PF3)
+    f_k = integrate.simps(Pix * PF3) / integrate.simps(PF3)
 
-    return fk
+    return f_k
