@@ -258,6 +258,9 @@ def parallel_gain_indirect(detector: casymir.casymir.Detector, spectrum: casymir
 
 
 def calculate_diff(E1, material):
+    """
+    Auxiliary function to compute energy of K-fluorescence x-rays.
+    """
     if E1 < material["ek"]:
         w0 = 0.0
         diff = 0.0

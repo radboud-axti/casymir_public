@@ -1,26 +1,28 @@
 """
-@author: Juan J. Pautasso
-@author: Gustavo Pacheco
-
 Monte Carlo simulation yielding cylindrical response to an isotropic point source in an infinite homogeneous
 medium with no boundaries. This program is a minimal Monte Carlo program scoring photon distributions in a cylindrical
 shells.
 
 Source code available online: http://omlc.ogi.edu/classroom/ece532/class4/ssmc/index.html
 
-Original script for scintillator detectors by J.J. Pautasso, adapted by G. Pacheco
-
+Original implementation for scintillator detectors by J.J. Pautasso, adapted by G. Pacheco
 """
 import numpy as np
 import scipy.special as ss
 from scipy import integrate
 
 
-def tk(mat: dict, n, f, seed=10):
+def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
+
     """
-        Each photon is repeatedly allowed to HOP to a new position, DROP some weight due to absorption,
-        SPIN into a new trajectory due to scattering, and CHECK whether the photon should die by ROULETTE.
-        """
+    Calculate spread function for remotely absorbed K-fluorescence photons.
+
+    :param mat: dictionary containing material properties
+    :param n: number of frequency vector samples to consider (frequency elements below the Nyquist frequency)
+    :param f: frequency vector
+    :param seed: seed used for random number generator subroutine
+    :return: array containing frenquency and the spread function associated with K-fluorescence reabsorption.
+    """
 
     density = mat["density"]
     PF = mat["pf"]
@@ -41,12 +43,10 @@ def tk(mat: dict, n, f, seed=10):
     high = np.max(f)
     incr = f[1] - f[0]
     dim = int((high/incr))+1
-    ms = (dim, 2)  # matrix size (256,2)
+    ms = (dim, 2)
 
     tk_emission = np.zeros(ms)
     result = np.zeros(ms)
-
-    # Start Initialization
 
     threshold = 0.01  # Used in roulette
     chance = 0.1  # Used in roulette

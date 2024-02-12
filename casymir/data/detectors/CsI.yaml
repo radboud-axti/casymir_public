@@ -1,3 +1,14 @@
+# CsI:Tl material properties.
+
+# Physical properties taken from Cao et al. Modeling and Evaluation of a High-Resolution
+# CMOS Detector for Cone-Beam CT of the Extremities. Med Phys. 2018;45(1):114-130. doi:10.1002/mp.12654.
+
+# Material attenuation coefficients taken from the NIST database.
+# 45.	Hubbell, J. and Seltzer, S. Tables of X-Ray Mass Attenuation Coefficients and Mass Energy-Absorption
+# Coefficients 1 keV to 20 MeV for Elements Z = 1 to 92 and 48 Additional Substances of Dosimetric Interest.
+# Radiation Physics Division, PML, NIST. 1995. Accessed December, 2023.
+# http://physics.nist.gov/PhysRefData/XrayMassCoef/cover.html
+
 Components:
   1: Cs, 0.51155
   2: I, 0.48845
