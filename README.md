@@ -57,7 +57,7 @@ python example.py <system_file.yaml> <spectrum_name> <kV> <mAs> [options]
 
 ### Optional inputs:
 
-- `--output_file, -of <output_file.csv>`:	Path to CSV to store the output of CASYMIR (standalone). The default is “output.xlsx”.
+- `--output_file, -of <output_file.csv>`:	Path to CSV to store the output of CASYMIR (standalone). The default is “output.csv”.
 - `--print_fit, -pf <Y|N>`:	Print polynomial fit parameters for MTF and NNPS curves. Default function for the MTF is f(x)=1+ax+bx^2+cx^3+dx^4, and f(x)=m+ax+bx^2+cx^3+dx^4 for the NNPS.
 
 When executed in standalone mode, CASYMIR creates an CSV file containing frequency vector (up until the detector’s Nyquist frequency), the MTF, and the NNPS. The following command saves the results corresponding to the provided DBT system example for a representative mammography/DBT spectrum. 
