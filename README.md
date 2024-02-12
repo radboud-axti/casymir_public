@@ -60,7 +60,11 @@ python example.py <system_file.yaml> <spectrum_name> <kV> <mAs> [options]
 - `--output_file, -of <output_file.xlsx>`:	Path to .xlsx to store the output of CASYMIR (standalone). The default is “output.xlsx”.
 - `--print_fit, -pf <Y|N>`:	Print polynomial fit parameters for MTF and NNPS curves. Default function for the MTF is f(x)=1+ax+bx^2+cx^3+dx^4, and f(x)=m+ax+bx^2+cx^3+dx^4 for the NNPS.
 
-When executed in standalone mode, CASYMIR creates an .xlsx file containing frequency vector (up until the detector’s Nyquist frequency), the MTF, and the NNPS.
+When executed in standalone mode, CASYMIR creates an .xlsx file containing frequency vector (up until the detector’s Nyquist frequency), the MTF, and the NNPS. The following command saves the results corresponding to the provided DBT system example for a representative mammography/DBT spectrum. 
+
+```
+python example.py example_dbt.yaml ex_spectrum 28 50 -of example_dbt.xlsx -pf Y
+```
 
 ## 3. System files
 Input to CASYMIR (standalone) is via YAML system files, which define all parameters of the x-ray source and detector.  The first two key-value pairs are used to store the system’s name and description, and these are followed by dictionaries containing the detector and source parameters.
