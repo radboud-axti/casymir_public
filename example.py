@@ -100,8 +100,8 @@ def main():
     parser.add_argument('spectrum_name', type=str, help='Name of the spectrum (e.g., LE for Low Energy)')
     parser.add_argument('kV', type=float, help='kV used to generate the spectrum')
     parser.add_argument('mAs', type=float, help='mAs used to generate the spectrum')
-    parser.add_argument('--output_file', '-of', type=str, default='ouptut.xlsx',
-                        help='Path to output file. Default is "output.xlsx".')
+    parser.add_argument('--output_file', '-of', type=str, default='ouptut.csv',
+                        help='Path to output file. Default is "output.csv".')
 
     parser.add_argument('--print_fit', '-pf', choices=['Y', 'N'], default='N', help='Print fit parameters')
 
