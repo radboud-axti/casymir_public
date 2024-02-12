@@ -9,8 +9,7 @@ setup(
         'scipy',
         'spekpy',
         'xraydb',
-        'pyYAML',
-        'openpyxl'
+        'pyYAML'
     ],
     entry_points={
         'console_scripts': ['casymir = casymir.module:example']
