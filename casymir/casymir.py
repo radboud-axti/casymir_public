@@ -10,7 +10,7 @@ Classes:
 
 - Tube: Contains relevant parameters for the X-ray source.
 
-- System: Represents the overall system configuration.
+- System: Stores all information required to run the model. Designed to run the model from a YAML file.
 
 - Spectrum: Manages X-ray spectrum parameters and derived measurements.
 
