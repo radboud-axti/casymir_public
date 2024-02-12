@@ -1,6 +1,6 @@
 import argparse
 import numpy as np
-from openpyxl import Workbook
+import csv
 from importlib import resources
 import casymir.casymir
 import casymir.processes
@@ -18,14 +18,14 @@ def print_intro():
     print("\t*********************************************************\n")
 
 
-def save_to_excel(data, excel_path):
+def save_to_csv(data, csv_path):
     headers = ["Frequency (1/mm)", "MTF", "NNPS"]
-    wb = Workbook()
-    ws = wb.active
-    ws.append(headers)
-    for row in data:
-        ws.append(row.tolist())
-    wb.save(excel_path)
+    with open(csv_path, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter=' ',
+                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(headers)
+        for row in data:
+            writer.writerow(row.tolist())
 
 
 def run_model_dc(system, spec_name, kV, mAs, fit='Y'):
@@ -36,11 +36,8 @@ def run_model_dc(system, spec_name, kV, mAs, fit='Y'):
     with resources.path("casymir.data.detectors", f'{material}.yaml') as yaml_file_path:
         material_path = str(yaml_file_path)
 
-    det = casymir.casymir.Detector(sys.detector["type"], material_path)
-    det.fill_from_dict(sys.detector)
-
-    tube = casymir.casymir.Tube()
-    tube.fill_from_dict(sys.source)
+    det = casymir.casymir.Detector(sys.detector["type"], material_path, sys.detector)
+    tube = casymir.casymir.Tube(sys.source)
 
     print("\nPCM for " + name + '\n')
 
@@ -71,11 +68,8 @@ def run_model_ic(system, spec_name, kV, mAs, fit='Y'):
     with resources.path("casymir.data.detectors", f'{material}.yaml') as yaml_file_path:
         material_path = str(yaml_file_path)
 
-    det = casymir.casymir.Detector(sys.detector["type"], material_path)
-    det.fill_from_dict(sys.detector)
-
-    tube = casymir.casymir.Tube()
-    tube.fill_from_dict(sys.source)
+    det = casymir.casymir.Detector(sys.detector["type"], material_path, sys.detector)
+    tube = casymir.casymir.Tube(sys.source)
 
     print("\nPCM for " + name + '\n')
 
@@ -130,7 +124,7 @@ def main():
     else:
         results = run_model_ic(system, spectrum, kV, mAs, fit=print_fit_params)
 
-    save_to_excel(results, output_path)
+    save_to_csv(results, output_path)
 
     print("\nProgram successfully ended, results written to: " + output_path + "\n")
 
