@@ -123,7 +123,7 @@ This dictionary contains all the parameters of the x-ray source used by the mode
 
 ### 4.1 Detectors 
 
-Detector material files are located in the “data/detectors” folder. These files define the characteristics of commonly used active layer materials, such as amorphous selenium (aSe) for direct conversion detectors and cesium chloride (CsI) for scintillator detectors.
+Detector material files are located in the “data/detectors” folder. These files define the characteristics of commonly used active layer materials, such as amorphous selenium (aSe) for direct conversion detectors and cesium iodide (CsI) for scintillator detectors.
 The parallel cascaded model implementation uses the following information about the detector materials:
 
 - `Components`: elemental composition, expressed in fractional weights.
