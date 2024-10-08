@@ -1,13 +1,13 @@
 system_id: example dbt
-description: Test DBT system
+description: Example DBT system based on a Siemens Mammomat Revelation
 
 detector:
   type: direct
   active_layer: Se
   px_size: 0.085
   ff: 1
-  thick: 200
-  layer: 7
+  thickness: 200
+  trapping_depth: 7
   elems: 2816
   add_noise: 0
   extra_materials: [(Carbon Fiber, 2), (Air, 1.5), (Carbon Fiber, 1.4), (Air, 8.3), (Carbon Fiber, 1), (Air, 3.4)]
@@ -17,4 +17,4 @@ source:
   target: W
   SID: 65.5
   filter: [(Rh, 0.057), (Be, 1)]
-  external_filter: [(Al, 2), (Air, 636.5)]
+  external_filter: [(PMMA, 40), (Air, 596.5)]

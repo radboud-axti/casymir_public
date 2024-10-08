@@ -13,9 +13,9 @@ Functions:
 
 - parallel_gain_indirect: Parallel gain block simulating fluorescent x-ray production and conversion in scintillators.
 
-- spread_direct: Charge redistribution for direct conversion detector.
+- charge_trapping: Charge redistribution for direct conversion detector.
 
-- spread_indirect: Optical photon spreading by scintillator materials.
+- optical_blur: Optical photon spreading by scintillator materials.
 
 - optical_coupling: Coupling of optical photons to photodiode in indirect conversion detectors.
 
@@ -89,26 +89,20 @@ def quantum_selection(detector: casymir.casymir.Detector, spectrum: casymir.casy
     return signal_2
 
 
-def parallel_gain_direct(detector: casymir.casymir.Detector, spectrum: casymir.casymir.Spectrum,
-                         sig: casymir.casymir.Signal, selection: list = None) -> casymir.casymir.Signal:
+def k_fluorescence(detector: casymir.casymir.Detector, spectrum: casymir.casymir.Spectrum,
+                   sig: casymir.casymir.Signal, selection: list = None) -> casymir.casymir.Signal:
     """
-    This function models a Parallel Gain block for direct conversion detectors, simulating gain stages considering
-    three parallel paths (A, B, and C) due to K-fluorescence generation in the semiconductor.
-    Path A: Conversion of incident photons into electron-hole pairs (no K-fluorescence generated)
-    Path B: Conversion of incident photons into electron-hole pairs along with K-fluorescence generation.
-    Path C: Conversion of incident photons into electron-hole pairs along with K-fluorescence generation, along with
-    remote reabsorption.
+    Simulate the K-fluorescence gain process for both direct and indirect conversion detectors.
 
-    The selection list controls whether a given parallel path will be taken into account.
+    This function models K-fluorescence generation and absorption in both direct conversion (electron-hole pairs)
+    and indirect conversion (optical photons in scintillators) detectors.
 
-    :param detector: A CASYMIR Detector object containing the characteristics of the detector.
-    :param spectrum: A CASYMIR Spectrum object representing the input spectrum.
-    :param sig: A CASYMIR Signal object representing the initial signal.
+    :param detector: CASYMIR Detector object (either direct or indirect conversion).
+    :param spectrum: CASYMIR Spectrum object.
+    :param sig: CASYMIR Signal object representing the input signal.
     :param selection: Binary list [A, B, C] indicating if a given parallel path will be taken into account.
-                     Defaults to [1, 1, 1] (all paths enabled).
 
-    :return: A CASYMIR Signal object representing the output signal after parallel gain stage.
-    :rtype: casymir.casymir.Signal
+    :return: CASYMIR Signal object after applying the K-fluorescence gain process.
     """
     energy = spectrum.energy
     fluence = spectrum.fluence
@@ -117,143 +111,72 @@ def parallel_gain_direct(detector: casymir.casymir.Detector, spectrum: casymir.c
     if selection is None:
         selection = [1, 1, 1]
 
-    kbi = 1.1
-    shape = np.shape(energy)
-    Ma, Mb, Mc, Mabc, MaDenom, MbDenom, McDenom, com_e = [np.zeros(shape) for _ in range(8)]
-
     diffEnergy = float(energy[1] - energy[0])
     QE = detector.get_QE(energy)
-
     fk = detector.calculate_fk()
 
-    for k, E1 in enumerate(np.arange(kbi, kV + diffEnergy, diffEnergy)):
-        w0, diff = calculate_diff(E1, detector.material)
+    # Process depends on detector type
+    if detector.type == "direct":
+        Ma, Mb, Mc, MaDenom, MbDenom, McDenom = [np.zeros(np.shape(energy)) for _ in range(6)]
+        # Direct conversion: electron-hole pair generation
+        for k, E1 in enumerate(np.arange(1.1, kV + diffEnergy, diffEnergy)):
+            w0, diff = calculate_diff(E1, detector.material)
+            Ma[k] = (1 - detector.material["xi"] * w0) * (E1 / detector.material["w"])
+            Mb[k] = detector.material["xi"] * w0 * (diff / detector.material["w"])
+            Mc[k] = detector.material["xi"] * w0 * fk * (detector.material["ek"] / detector.material["w"])
+            MaDenom[k] = QE[k] * (1 - detector.material["xi"] * w0)
+            MbDenom[k] = QE[k] * detector.material["xi"] * w0
+            McDenom[k] = QE[k] * detector.material["xi"] * w0 * fk
 
-        Ma[k] = (1 - detector.material["xi"] * w0) * (E1 / detector.material["w"])
-        Mb[k] = (detector.material["xi"] * w0) * (diff / detector.material["w"])
-        Mc[k] = (detector.material["xi"] * w0 * fk) * (detector.material["ek"] / detector.material["w"])
-        Mabc[k] = Ma[k] + Mb[k] + Mc[k]
+    elif detector.type == "indirect":
+        Ma, Mb, Mc, Mabc, MaDenom, MbDenom, McDenom, com_e = [np.zeros(np.shape(energy)) for _ in range(8)]
+        # Indirect conversion: optical photon generation and reabsorption
+        com_term_z = detector.com_term_z(energy)
+        for k, E1 in enumerate(np.arange(1.1, kV + diffEnergy, diffEnergy)):
+            w0, diff = calculate_diff(E1, detector.material)
 
-        MaDenom[k] = QE[k] * (1 - detector.material["xi"] * w0)
-        MbDenom[k] = QE[k] * detector.material["xi"] * w0
-        McDenom[k] = QE[k] * detector.material["xi"] * w0 * fk
+            com_term = com_term_z[:, k]
 
+            Ma[k] = integrate.simps(com_term, dx=1) * (1 - detector.material["xi"] * w0) * E1 * detector.material["m0"]
+            Mb[k] = integrate.simps(com_term, dx=1) * (detector.material["xi"] * w0) * detector.material["m0"] * diff
+            Mc[k] = integrate.simps(com_term, dx=1) * (
+                    detector.material["xi"] * w0) * detector.material["ek"] * fk * detector.material["m0"]
+            com_e[k] = integrate.simps(com_term, dx=1)
+            Mabc[k] = Ma[k] + Mb[k] + Mc[k]
+
+            MaDenom[k] = QE[k] * (1 - detector.material["xi"] * w0)
+            MbDenom[k] = QE[k] * detector.material["xi"] * w0
+            McDenom[k] = QE[k] * detector.material["xi"] * w0 * fk
+
+    # Calculate stochastic gains (gA, gB, gC)
     gA = integrate.simps(Ma * fluence, energy) / integrate.simps(MaDenom * fluence, energy)
     gB = integrate.simps(Mb * fluence, energy) / integrate.simps(MbDenom * fluence, energy)
     gC = integrate.simps(Mc * fluence, energy) / integrate.simps(McDenom * fluence, energy)
 
-    wA = (1 - (detector.material["xi"] * detector.material["omega"])) * selection[0]
-    wB = (detector.material["xi"] * detector.material["omega"]) * selection[1]
-    wC = (detector.material["xi"] * detector.material["omega"]) * selection[2]
-
+    # Apply stochastic gains to the signal
+    wA = (1 - detector.material["xi"] * detector.material["omega"]) * selection[0]
+    wB = detector.material["xi"] * detector.material["omega"] * selection[1]
+    wC = detector.material["xi"] * detector.material["omega"] * selection[2]
     tk = detector.calculate_Tk()
 
     sig2A = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
     sig2B = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
     sig2C = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
 
-    # Path A: stochastic gain gA, Poisson statistics -> var_gA = gA
-    # Path B: stochastic gain gB, Poisson statistics -> var_gB = gB
+    # Path A: stochastic gain gA
     sig2A.stochastic_gain(gA, gA ** (1 / 2), wA)
+
+    # Path B: stochastic gain gB
     sig2B.stochastic_gain(gB, gB ** (1 / 2), wB)
 
-    # Probability of remote reabsorption is fk and probability of whole path C occurring is wC
-    # Path C:
+    # Path C: remote reabsorption
     sig2C.stochastic_blur(tk, wC * fk)
     sig2C.stochastic_gain(gC, gC ** (1 / 2), 1)
 
-    # Cross wiener spectrum for B & C processes:
-    wienerBC = 2 * wB * tk * fk * gB * gC * sig.wiener
-
-    # Putting paths A, B, and C together:
     sig3 = copy.copy(sig)
     sig3.signal = sig2A.signal + sig2B.signal + sig2C.signal
-    sig3.wiener = sig2A.wiener + sig2B.wiener + sig2C.wiener + wienerBC
+    sig3.wiener = sig2A.wiener + sig2B.wiener + sig2C.wiener + 2 * wB * tk * fk * gB * gC * sig.wiener
 
-    return sig3
-
-
-def parallel_gain_indirect(detector: casymir.casymir.Detector, spectrum: casymir.casymir.Spectrum,
-                           sig: casymir.casymir.Signal, selection: list = None):
-    """
-    This function models a Parallel Gain block for indirect conversion detectors, simulating gain stages considering
-    three parallel paths (A, B, and C) due to K-fluorescence generation in the scintillator material.
-    Path A: Conversion of incident photons into optical photons (no K-fluorescence generated)
-    Path B: Conversion of incident photons into optical photons along with K-fluorescence generation.
-    Path C: Conversion of incident photons into optical photons along with K-fluorescence generation, along with
-    remote reabsorption.
-
-    The selection list controls whether a given parallel path will be taken into account.
-
-    :param detector: A CASYMIR Detector object containing the characteristics of the detector.
-    :param spectrum: A CASYMIR Spectrum object representing the input spectrum.
-    :param sig: A CASYMIR Signal object representing the initial signal.
-    :param selection: Binary list [A, B, C] indicating if a given parallel path will be taken into account.
-                     Defaults to [1, 1, 1] (all paths enabled).
-
-    :return: A CASYMIR Signal object representing the output signal after parallel gain stage.
-    :rtype: casymir.casymir.Signal
-    """
-    if selection is None:
-        selection = [1, 1, 1]
-
-    energy = spectrum.energy
-    fluence = spectrum.fluence
-    kV = spectrum.kV
-
-    kbi = 1.1
-    shape = np.shape(energy)
-    Ma, Mb, Mc, Mabc, MaDenom, MbDenom, McDenom, com_e = [np.zeros(shape) for _ in range(8)]
-
-    diffEnergy = float(energy[1] - energy[0])
-
-    com_term_z = detector.com_term_z(energy)
-    QE = detector.get_QE(energy)
-    fk = detector.calculate_fk()
-
-    for k, E1 in enumerate(np.arange(kbi, kV + diffEnergy, diffEnergy)):
-        w0, diff = calculate_diff(E1, detector.material)
-
-        com_term = com_term_z[:, k]
-
-        Ma[k] = integrate.simps(com_term, dx=1) * (1 - detector.material["xi"] * w0) * E1 * detector.material["m0"]
-        Mb[k] = integrate.simps(com_term, dx=1) * (detector.material["xi"] * w0) * detector.material["m0"] * diff
-        Mc[k] = integrate.simps(com_term, dx=1) * (
-                detector.material["xi"] * w0) * detector.material["ek"] * fk * detector.material["m0"]
-        com_e[k] = integrate.simps(com_term, dx=1)
-        Mabc[k] = Ma[k] + Mb[k] + Mc[k]
-
-        MaDenom[k] = QE[k] * (1 - detector.material["xi"] * w0)
-        MbDenom[k] = QE[k] * detector.material["xi"] * w0
-        McDenom[k] = QE[k] * detector.material["xi"] * w0 * fk
-
-    gA = integrate.simps(Ma * fluence, energy) / integrate.simps(MaDenom * fluence, energy)
-    gB = integrate.simps(Mb * fluence, energy) / integrate.simps(MbDenom * fluence, energy)
-    gC = integrate.simps(Mc * fluence, energy) / integrate.simps(McDenom * fluence, energy)
-
-    wA = (1 - (detector.material["xi"] * detector.material["omega"])) * selection[0]
-    wB = (detector.material["xi"] * detector.material["omega"]) * selection[1]
-    wC = (detector.material["xi"] * detector.material["omega"]) * selection[2]
-
-    tk = detector.calculate_Tk()
-
-    sig2A = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
-    sig2B = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
-    sig2C = casymir.casymir.Signal(sig.freq, sig.signal, sig.wiener)
-    # Path A: stochastic gain gA, Poisson statistics -> var_gA = gA
-    # Path B: stochastic gain gB, Poisson statistics -> var_gB = gB
-    sig2A.stochastic_gain(gA, gA ** (1 / 2), wA)
-    sig2B.stochastic_gain(gB, gB ** (1 / 2), wB)
-    # Probability of remote reabsorption is fk and probability of whole path C occurring is wC
-    # Path C:
-    sig2C.stochastic_blur(tk, wC * fk)
-    sig2C.stochastic_gain(gC, gC ** (1 / 2), 1)
-    # Cross wiener spectrum for B & C processes:
-    wienerBC = 2 * wB * tk * fk * gB * gC * sig.wiener
-    # Putting paths A, B and C together:
-    sig3 = copy.copy(sig)
-    sig3.signal = sig2A.signal + sig2B.signal + sig2C.signal
-    sig3.wiener = sig2A.wiener + sig2B.wiener + sig2C.wiener + wienerBC
     return sig3
 
 
@@ -270,12 +193,14 @@ def calculate_diff(E1, material):
     return w0, diff
 
 
-def spread_direct(detector: casymir.casymir.Detector, signal: casymir.casymir.Signal) -> casymir.casymir.Signal:
+def charge_trapping(detector: casymir.casymir.Detector, signal: casymir.casymir.Signal) -> casymir.casymir.Signal:
     """
-    Apply charge redistribution for direct conversion detectors.
+    Apply blurring by charge collection in direct conversion detectors.
 
-    This function simulates the effects of charge redistribution in a direct conversion detector.
-    Charge redistribution is caused by the finite thickness of the charge collection layer.
+    This function simulates the blurring caused by charge trapping in the semiconductor layer. The implementation
+    uses the expression presented in Zhao et al. Imaging performance of amorphous selenium based flat-panel
+    detectors for digital mammography: Characterization of a small area prototype detector.
+    Med Phys. 2003;30(2):254-263. doi:10.1118/1.1538233
 
     :param detector: CASYMIR Detector object containing the characteristics of the detector.
     :param signal: A CASYMIR Signal object representing the input signal.
@@ -284,26 +209,22 @@ def spread_direct(detector: casymir.casymir.Detector, signal: casymir.casymir.Si
     :rtype: casymir.casymir.Signal
     """
     # Extract relevant parameters from the detector
-    t = detector.thick  # Nominal detector layer thickness [um]
-    l = detector.layer  # Charge collection layer thickness [um]
-
+    t = detector.thickness * 1e-3  # Nominal detector layer thickness [mm]
+    l = detector.trapping_depth * 1e-3  # Charge collection layer distance [mm]
     # Extract frequency vector from the signal
     f = signal.freq
-
     # Calculate charge redistribution function (tb)
-    tb = (t * np.sinh(2 * np.pi * f * (t - l) * 1e-3)) / ((t - l) * np.sinh(2 * np.pi * f * t * 1e-3))
+    tb = (t * np.sinh(2 * np.pi * f * (t - l))) / ((t - l) * np.sinh(2 * np.pi * f * t))
     tb[0] = 1
 
-    # Create a copy of the input signal
     signal_2 = copy.copy(signal)
 
-    # Apply stochastic blur using charge redistribution function (tb)
     signal_2.stochastic_blur(tb, 1)
 
     return signal_2
 
 
-def spread_indirect(detector: casymir.casymir.Detector, signal: casymir.casymir.Signal) -> casymir.casymir.Signal:
+def optical_blur(detector: casymir.casymir.Detector, signal: casymir.casymir.Signal) -> casymir.casymir.Signal:
     """
     This function models the stochastic blurring process caused by the spreading of optical photons
     in the scintillator material of an indirect conversion detector.
@@ -393,7 +314,7 @@ def px_integration(detector: casymir.casymir.Detector, signal: casymir.casymir.S
     f2 = signal_2.freq[0:int(signal_2.length / 2)]
     mtf = mtf[0:int(signal_2.length / 2)]
 
-    # Normalized NPS (Noise Power Spectrum)
+    # Normalized NPS (Noise Power Spectrum divided by large area signal)
     nnps = nps / (signal_2.signal[0] ** 2)
 
     signal_2.mtf = mtf

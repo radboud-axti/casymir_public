@@ -1,0 +1,8 @@
+material:
+  - name: PMMA
+    density: 1.19
+    composition:
+      6: 0.599848
+      8: 0.319614
+      1: 0.080538
+    comment: Polymethyl methacrylate (PMMA), defined by material weights
