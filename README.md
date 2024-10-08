@@ -71,13 +71,13 @@ detector:
   trapping_depth: 0
   elems: 256
   add_noise: 100
-  extra_materials: [(Al, 0.05), (Carbon Fiber, 2.5), (Silica, 1)]
+  extra_materials: [(Carbon Fiber, 2.5), (Silicon Dioxide, 1)]
 
 source:
   target_angle: 10
   target: W
   SID: 95
-  filter: [(Be, 1.4), (Al, 1.42), (Al, 0.044)]
+  filter: [(Be, 1.4), (Al, 1.514)]
   external_filter: [(Al, 10), (Air, 950)]
 ```
 Explanations of each of the detector and source parameters are given in the following subsections
