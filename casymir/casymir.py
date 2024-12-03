@@ -16,6 +16,7 @@ Classes:
 
 - Signal: Stores frequency vector, magnitude, and wiener spectrum for the propagated signals.
 """
+from typing import Tuple, Any
 
 from scipy.optimize import curve_fit
 import xraydb as xrdb
@@ -663,32 +664,63 @@ class Signal:
         reverse = np.flip(self.wiener)
         self.wiener = self.wiener + reverse
 
-    def fit(self, type_mtf: str = "poly4", type_nps: str = "poly4") -> None:
+    def fit(self, type_mtf: str = "lorentzian", type_nps: str = "gaussian") -> Tuple[Any, Any]:
         """
-        Fit curves to the MTF and NNPS.
+        Fit curves to the MTF and NPS.
 
-        Currently, only fourth degree polynomial fits are supported. Alternative fit functions can be defined
-        within this method.
+        Supported fit functions:
+        - MTF:
+            "lorentzian": A double Lorentzian function:
+                MTF(f) = A / (1 + (f/B)^2) + (1-A) / (1 + (f/C)^2)
+            "poly4": A fourth-degree polynomial:
+                MTF(f) = 1 + A*f + B*f^2 + C*f^3 + D*f^4
+        - NPS:
+            "gaussian": A double Gaussian function:
+                NPS(f) = A * exp(-(f/B)^2) + C * exp(-(f/D)^2)
+            "poly4": A fourth-degree polynomial:
+                NPS(f) = M + A*f + B*f^2 + C*f^3 + D*f^4
 
-        :param type_mtf: type of fit for the MTF.
-        :param type_nps: type of fit for the NNPS.
+        :param type_mtf: Type of fit for the MTF. Options: "lorentzian", "poly4".
+        :param type_nps: Type of fit for the NPS. Options: "gaussian", "poly4".
+        :return: Tuple containing the coefficients of the MTF and NPS fits. Returns None if an unsupported function
+                 is passed
         """
+        # Fit functions.
+        fit_functions = {
+            "gaussian": lambda x, a, b, c, d: a * np.exp(- (x / b) ** 2) + c * np.exp(- (x / d) ** 2),
+            "poly4_mtf": lambda x, a, b, c, d: 1 + a * x + b * (x ** 2) + c * (x ** 3) + d * (x ** 4),
+            "lorentzian": lambda x, a, b, c: a / (1 + (x / b) ** 2) + (1 - a) / (1 + (x / c) ** 2),
+            "poly4": lambda x, m, a, b, c, d: m + a * x + b * (x ** 2) + c * (x ** 3) + d * (x ** 4)
+        }
+        # Fit initalization. This is needed for the NPS Gaussian fit.
+        p0 = {"gaussian": [np.mean(self.nnps), 10, np.mean(self.nnps), 10],
+              "poly4_mtf": None, "lorentzian": None, "poly4": None}
 
-        def poly4_mtf(x, a, b, c, d):
-            return 1 + a * x + b * (x ** 2) + c * (x ** 3) + d * (x ** 4)
+        def generic_fit(fit_type: str, func_name: str, x_data, y_data):
+            if func_name not in fit_functions:
+                print(f"Undefined fit function: {fit_type}")
+                return None
+            try:
+                popt, _ = curve_fit(fit_functions[func_name], x_data, y_data, p0=p0[func_name])
+                return popt
+            except Exception as e:
+                print(f"Error fitting {fit_type}: {e}")
+                return None
 
-        def poly4(x, m, a, b, c, d):
-            return m + a * x + b * (x ** 2) + c * (x ** 3) + d * (x ** 4)
+        # Fit MTF
+        mtf_func_name = "lorentzian" if type_mtf == "lorentzian" else "poly4_mtf"
+        popt_mtf = generic_fit("MTF", mtf_func_name, self.freq, self.mtf)
 
-        if type_mtf == "poly4":
-            popt, pcov = curve_fit(poly4_mtf, self.freq, self.mtf)
-            print('MTF fit: a=%6.5f, b=%6.5f, c=%6.5f, d=%6.5f' % tuple(popt))
-        else:
-            print("Undefined fit function for MTF\n")
+        if popt_mtf is not None:
+            print(f"MTF {type_mtf} fit parameters: " +
+                  ", ".join(f"c{i + 1}={p:.5f}" for i, p in enumerate(popt_mtf)))
 
-        if type_nps == "poly4":
-            popt2, pcov2 = curve_fit(poly4, self.freq, self.nnps)
-            print('NNPS fit: a=%4.3E, b=%4.3E, c=%4.3E, d=%4.3E, e=%4.3E \n' % tuple(popt2))
+        # Fit NPS
+        nps_func_name = "gaussian" if type_nps == "gaussian" else "poly4"
+        popt_nps = generic_fit("NPS", nps_func_name, self.freq, self.nnps)
 
-        else:
-            print("Undefined fit function for NNPS\n")
+        if popt_nps is not None:
+            print(f"NPS {type_nps} fit parameters: " +
+                  ", ".join(f"c{i + 1}={p:.5E}" for i, p in enumerate(popt_nps)))
+
+        return popt_mtf, popt_nps
