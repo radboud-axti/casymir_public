@@ -70,17 +70,18 @@ def run_simulation(system, spec_name, kV, mAs, detector_type, fit='Y'):
     tube = casymir.casymir.Tube(sys.source)
     spec = casymir.casymir.Spectrum(name=spec_name, kV=kV, mAs=mAs, detector=det, tube=tube)
 
-    sig = casymir.processes.initial_signal(det, spec)
-    sig = casymir.processes.quantum_selection(det, spec, sig)
-    sig = casymir.processes.k_fluorescence(det, spec, sig)
-
+    sig, _, _ = casymir.processes.initial_signal(det, spec)
+    sig, _, _ = casymir.processes.quantum_selection(det, spec, sig)
+    sig = casymir.processes.absorption_block(det, spec, sig)
     if detector_type == "direct":
-        sig = casymir.processes.charge_trapping(det, sig)
+        sig, _, _ = casymir.processes.charge_trapping(det, sig)
     else:
-        sig = casymir.processes.optical_blur(det, sig)
-        sig = casymir.processes.optical_coupling(det, sig)
+        sig, _, _ = casymir.processes.optical_blur(det, sig)
+        sig, _, _ = casymir.processes.optical_coupling(det, sig)
 
-    sig = casymir.processes.px_integration(det, sig)
+    sig, _, _ = casymir.processes.q_integration(det, sig)
+    sig = casymir.processes.aliasing(det, sig)
+    sig = casymir.processes.model_output(det, sig)
 
     if fit == 'Y':
         print("Fit Results:\n")

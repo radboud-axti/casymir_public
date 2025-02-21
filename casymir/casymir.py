@@ -109,6 +109,8 @@ class Detector:
             self.fill_from_dict(props)
             self.pxa = (self.px_size ** 2) * self.ff
 
+        self.fk = self.calculate_fk()
+
     def _load_yml(self, yml_file: str):
         """
         Loads material properties from a YAML file and fills the Detector object's attributes.
@@ -163,16 +165,16 @@ class Detector:
             fk = fk_general.fk(self.thickness, self.material, w_hZ=self.components[0][1])
             return fk
 
-    def calculate_Tk(self):
+    def calculate_Tk(self, signal):
         """
         Calculates blurring due to K-fluorescence reabsorption in the detector (Tk) as a function of spatial
         frequency.
 
+        :param signal: A CASYMIR signal object.
         :return: Blurring due to K-fluorescence reabsorption.
         """
-        n = int(self.elems / 2)  # Number of elements within the freq range (0 to f_nyquist)
-        R = np.arange(2 * n)  # Array length
-        f = R / (self.px_size * (2 * n))  # Spatial frequency vector [1/mm]
+        f = signal.freq
+        n = int(signal.freq.size / 2)
         csf = tk_general.tk(self.material, n, f)
         tk = csf[:, 1] / np.max(csf[:, 1])  # Normalized result
         return tk
@@ -187,7 +189,8 @@ class Detector:
         mu = np.empty((len(energy), len(self.components)))
         i = 0
         for component in self.components:
-            mu[:, i] = xrdb.mu_elam(component[0], energy=energy * 1e3, kind='total')
+            mu[:, i] = xrdb.mu_elam(component[0], energy=energy * 1e3, kind='total') \
+                       - xrdb.mu_elam(component[0], energy=energy * 1e3, kind='coh')
             i += 1
         weights = [x[1] for x in self.components]
         mu_comp = np.dot(mu, weights)
@@ -607,7 +610,7 @@ class Signal:
     - fit: Fits MTF and NNPS curves.
     """
 
-    def __init__(self, freq: np.ndarray, signal: np.ndarray, wiener: np.ndarray):
+    def __init__(self, freq: np.ndarray, mean_quanta: float, signal: np.ndarray, wiener: np.ndarray):
         """
         Initialize a CASYMIR Signal object.
 
@@ -615,6 +618,7 @@ class Signal:
         :param signal: Signal magnitude
         :param wiener: Wiener spectrum magnitude.
         """
+        self.mean_quanta = mean_quanta
         self.signal = signal
         self.wiener = wiener
         self.freq = freq
@@ -622,47 +626,43 @@ class Signal:
         self.mtf = np.zeros(np.size(freq))
         self.nnps = np.zeros(np.size(freq))
 
-    def stochastic_gain(self, mean_gain: float, gain_std: float, weight: float) -> None:
+    def stochastic_gain(self, mean_gain: float, gain_std: float) -> None:
         """
         Apply stochastic gain process to a Signal object.
 
         :param mean_gain: mean gain associated with the process.
         :param gain_std: standard deviation of the gain.
-        :param weight: weight of the process.
         """
-        signal_2 = weight * (mean_gain * self.signal)
-        wiener_2 = weight * (((mean_gain ** 2) * self.wiener) + ((gain_std ** 2) * self.signal))
+        mean_quanta_2 = mean_gain * self.mean_quanta
+        signal_2 = mean_gain * self.signal
+        wiener_2 = ((mean_gain ** 2) * self.wiener) + ((gain_std ** 2) * self.mean_quanta)
+        self.mean_quanta = mean_quanta_2
         self.signal = signal_2
         self.wiener = wiener_2
 
-    def stochastic_blur(self, t: np.ndarray, weight: float) -> None:
+    def stochastic_blur(self, t: np.ndarray) -> None:
         """
         Apply stochastic blur to a Signal object.
 
         :param t: Spread function in frequency domain
-        :param weight: weight of the process
         """
-        signal_2 = weight * (t * self.signal)
-        wiener_2 = weight * ((t ** 2) * self.wiener + (1 - t ** 2) * self.signal)
+        signal_2 = t * self.signal
+        wiener_2 = ((t ** 2) * self.wiener + (1 - t ** 2) * self.mean_quanta)
         self.signal = signal_2
         self.wiener = wiener_2
 
-    def deterministic_blur(self, a: np.array, weight: float) -> None:
+    def deterministic_blur(self, a: np.array) -> None:
         """
         Apply deterministic blur (filtering) to a Signal object.
 
         :param a: Spread function in frequency domain.
-        :param weight: weight of the process.
         """
-        self.signal = weight * (a * self.signal)
-        self.wiener = weight * ((a ** 2) * self.wiener)
-
-    def resample(self):
-        """
-        Aliasing implementation
-        """
-        reverse = np.flip(self.wiener)
-        self.wiener = self.wiener + reverse
+        mean_quanta_2 = a[0] * self.mean_quanta
+        signal_2 = a * self.signal
+        wiener_2 = ((a ** 2) * self.wiener)
+        self.mean_quanta = mean_quanta_2
+        self.signal = signal_2
+        self.wiener = wiener_2
 
     def fit(self, type_mtf: str = "lorentzian", type_nps: str = "gaussian") -> Tuple[Any, Any]:
         """

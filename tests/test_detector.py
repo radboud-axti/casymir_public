@@ -52,7 +52,7 @@ class TestDetector(unittest.TestCase):
         self.assertAlmostEqual(fk_value, expected_fk, places=6)
 
     def test_calculate_Tk(self):
-        tk_value = self.detector.calculate_Tk()
+        tk_value = self.detector.calculate_Tk(signal)
 
         # Reference values for second, middle, and last elements from master branch
         reference_tk_second = 0.9999987208724465
