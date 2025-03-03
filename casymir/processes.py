@@ -280,15 +280,12 @@ def remote_k_absorption(detector: casymir.casymir.Detector, spectrum: casymir.ca
     gC = integrate.simps(Mc * fluence, energy) / integrate.simps(McDenom * fluence, energy)
 
     sig2C = copy.copy(sig)
+    fk = detector.fk
+    sig2C.stochastic_gain(fk, np.sqrt(fk*(1-fk)))
     sig2C.stochastic_blur(tk)
     sig2C.stochastic_gain(gC, np.sqrt(gC))
 
-    sig3 = copy.copy(sig)
-    sig3.mean_quanta = sig2C.mean_quanta * detector.fk
-    sig3.signal = sig2C.signal * detector.fk
-    sig3.wiener = sig2C.wiener * detector.fk
-
-    return sig3, gC * detector.fk, tk
+    return sig2C, gC * detector.fk, tk
 
 
 def absorption_block(detector: casymir.casymir.Detector, spectrum: casymir.casymir.Spectrum,
@@ -334,7 +331,8 @@ def absorption_block(detector: casymir.casymir.Detector, spectrum: casymir.casym
     return comb_sig
 
 
-def charge_trapping(detector: casymir.casymir.Detector, sig: casymir.casymir.Signal) -> tuple[Signal, int, ndarray]:
+def charge_trapping(detector: casymir.casymir.Detector, spectrum: casymir.casymir.Spectrum,
+                    sig: casymir.casymir.Signal) -> tuple[Signal, int, ndarray]:
     """
     Models the blurring caused by charge trapping in the semiconductor layer. The implementation
     uses the expression presented in Zhao et al. Imaging performance of amorphous selenium based flat-panel
@@ -342,6 +340,7 @@ def charge_trapping(detector: casymir.casymir.Detector, sig: casymir.casymir.Sig
     Med Phys. 2003;30(2):254-263. doi:10.1118/1.1538233
 
     :param detector: CASYMIR Detector object.
+    :param spectrum: CASYMIR Spectrum object. Used as an argument for consistency.
     :param sig: CASYMIR Signal object.
 
     :return: Tuple with updated Signal object, mean gain, and spread function.
@@ -360,7 +359,8 @@ def charge_trapping(detector: casymir.casymir.Detector, sig: casymir.casymir.Sig
     return signal_2, 1, tb
 
 
-def optical_blur(detector: casymir.casymir.Detector, sig: casymir.casymir.Signal) -> tuple[Signal, int, ndarray]:
+def optical_blur(detector: casymir.casymir.Detector, spectrum: casymir.casymir.Spectrum,
+                 sig: casymir.casymir.Signal) -> tuple[Signal, int, ndarray]:
     """
     Models the stochastic blurring process caused by the spreading of optical photons
     in the scintillator material of an indirect conversion detector.
@@ -369,6 +369,7 @@ def optical_blur(detector: casymir.casymir.Detector, sig: casymir.casymir.Signal
     system for contrast-enhanced imaging. Med Phys. 2024;51(5):3322-3333. doi:10.1002/mp.17069
 
     :param detector: CASYMIR Detector object.
+    :param spectrum: CASYMIR Spectrum object. Used as an argument for consistency.
     :param sig: CASYMIR Signal object.
 
     :return: Tuple with updated Signal object, mean gain, and spread function.
@@ -386,13 +387,15 @@ def optical_blur(detector: casymir.casymir.Detector, sig: casymir.casymir.Signal
     return signal_2, 1, osf
 
 
-def optical_coupling(detector: casymir.casymir.Detector, sig: casymir.casymir.Signal) -> tuple[Signal, Any, ndarray]:
+def optical_coupling(detector: casymir.casymir.Detector, spectrum: casymir.casymir.Spectrum,
+                     sig: casymir.casymir.Signal) -> tuple[Signal, Any, ndarray]:
     """
     This function models the coupling of optical photons to the photodiode of a detector, where the probability
     of an incident quantum being coupled is determined by the average coupling efficiency "ce". This process is modeled
     as a quantum selection; that is, a stochastic gain stage with Bernoulli statistics.
 
     :param detector: CASYMIR Detector object.
+    :param spectrum: CASYMIR Spectrum object. Used as an argument for consistency.
     :param sig: CASYMIR Signal object.
 
     :return: Tuple with updated Signal object, mean gain, and spread function.
@@ -419,14 +422,12 @@ def q_integration(detector: casymir.casymir.Detector, sig: casymir.casymir.Signa
     """
 
     # Deterministic blurring by pixel aperture function Ta
-    ta = np.abs(np.sinc(detector.px_size * detector.ff * sig.freq))
+    sampling_aperture = np.sqrt(detector.pxa)
+    ta = np.abs(np.sinc(sampling_aperture * sig.freq))
     signal_2 = copy.copy(sig)
     signal_2.deterministic_blur(ta)
-
-    # Integrated Signal and Wiener spectrum. pxa = active pixel area = pixel area * fill factor
-    signal_2.mean_quanta = signal_2.mean_quanta * detector.pxa
-    signal_2.signal = signal_2.signal * detector.pxa
-    signal_2.wiener = signal_2.wiener * (detector.pxa ** 2)
+    # Integration as deterministic gain by the active pixel area
+    signal_2.stochastic_gain(detector.pxa, 0)
 
     return signal_2, detector.pxa, ta
 
@@ -491,8 +492,8 @@ def model_output(detector: casymir.casymir.Detector, signal: casymir.casymir.Sig
     mtf = signal.signal / signal.signal[0]
     add_noise = detector.add_noise
 
-    # Apply electronic noise to the Wiener spectrum (NPS)
-    wiener2 = signal.wiener[0:int(signal.length / 2)] + ((add_noise ** 2) * detector.pxa)
+    # Apply electronic noise to the Wiener spectrum (NPS) using the entire pixel area
+    wiener2 = signal.wiener[0:int(signal.length / 2)] + ((add_noise ** 2) * (detector.pxa/detector.ff))
     signal2 = signal.signal[0:int(signal.length / 2)]
 
     # Frequency vector up to Nyquist frequency
@@ -502,9 +503,7 @@ def model_output(detector: casymir.casymir.Detector, signal: casymir.casymir.Sig
     # Normalized NPS (Noise Power Spectrum divided by large area signal)
     nnps = wiener2 / (signal.signal[0] ** 2)
 
-    output_signal = casymir.casymir.Signal(
-        freq=f2, signal=signal2, wiener=wiener2, mean_quanta=signal.mean_quanta  # Preserve mean quanta
-    )
+    output_signal = casymir.casymir.Signal(freq=f2, signal=signal2, wiener=wiener2, mean_quanta=signal.mean_quanta)
 
     output_signal.mtf = mtf
     output_signal.nnps = nnps

@@ -563,7 +563,7 @@ class Spectrum:
         :param coordinates: Optional list or tuple containing the x, y, and z coordinates (in cm).
                             If not provided, uses the coordinates set during initialization.
 
-        :return: The photon fluence at the specified reference point, measured in photons per square millimeter.
+        :return: The photon fluence at the specified reference point, measured in photons per square millimeter per keV.
         """
 
         if coordinates is None:
