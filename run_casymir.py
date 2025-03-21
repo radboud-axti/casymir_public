@@ -74,10 +74,10 @@ def run_simulation(system, spec_name, kV, mAs, detector_type, fit='Y'):
     sig, _, _ = casymir.processes.quantum_selection(det, spec, sig)
     sig = casymir.processes.absorption_block(det, spec, sig)
     if detector_type == "direct":
-        sig, _, _ = casymir.processes.charge_trapping(det, sig)
+        sig, _, _ = casymir.processes.charge_trapping(det, spec, sig)
     else:
-        sig, _, _ = casymir.processes.optical_blur(det, sig)
-        sig, _, _ = casymir.processes.optical_coupling(det, sig)
+        sig, _, _ = casymir.processes.optical_blur(det, spec, sig)
+        sig, _, _ = casymir.processes.optical_coupling(det, spec, sig)
 
     sig, _, _ = casymir.processes.q_integration(det, sig)
     sig = casymir.processes.aliasing(det, sig)

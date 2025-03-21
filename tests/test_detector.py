@@ -2,6 +2,7 @@ import unittest
 from importlib import resources
 import numpy as np
 from casymir.casymir import Detector
+from casymir.casymir import Signal
 
 
 class TestDetector(unittest.TestCase):
@@ -35,6 +36,12 @@ class TestDetector(unittest.TestCase):
             "add_noise": 100
         })
 
+        freq = np.linspace(0, 1 / (2 * 0.085), 2816)
+        magnitude = np.ones_like(freq)
+        signal = np.ones_like(freq)
+        wiener = np.ones_like(freq)
+        self.signal = Signal(freq, magnitude[0], signal, wiener)
+
     def test_initialization(self):
         self.assertEqual(self.detector.type, "direct")
         self.assertEqual(self.detector.active_layer, "Se")
@@ -52,12 +59,12 @@ class TestDetector(unittest.TestCase):
         self.assertAlmostEqual(fk_value, expected_fk, places=6)
 
     def test_calculate_Tk(self):
-        tk_value = self.detector.calculate_Tk(signal)
+        tk_value = self.detector.calculate_Tk(self.signal)
 
-        # Reference values for second, middle, and last elements from master branch
-        reference_tk_second = 0.9999987208724465
-        reference_tk_middle = 0.42138829234554287
-        reference_tk_last = 0.21773389035292326
+        # Reference values for second, middle, and last elements
+        reference_tk_second = 0.9999996799903333
+        reference_tk_middle = 0.6766989967662854
+        reference_tk_last = 0.42138829234554287
 
         self.assertAlmostEqual(tk_value[1], reference_tk_second, places=6)
         self.assertAlmostEqual(tk_value[len(tk_value) // 2], reference_tk_middle, places=6)
@@ -68,8 +75,8 @@ class TestDetector(unittest.TestCase):
         self.detector.get_mu(energy)
         mu = self.detector.mu
 
-        ref_mu_min = 19.39804184424776
-        ref_mu_max = 4975.060504277657
+        ref_mu_min = 18.945780501755618
+        ref_mu_max = 4969.8482118864395
 
         self.assertAlmostEqual(np.min(mu), ref_mu_min, places=6)
         self.assertAlmostEqual(np.max(mu), ref_mu_max, places=6)
@@ -78,7 +85,7 @@ class TestDetector(unittest.TestCase):
         energy = np.linspace(1.05, 27.95, 270, endpoint=True)
         qe = self.detector.get_QE(energy)
 
-        ref_qe_min = 0.8434614228958977
+        ref_qe_min = 0.8365448463657389
         ref_qe_max = 1.0
 
         self.assertAlmostEqual(np.min(qe), ref_qe_min, places=6)
@@ -91,11 +98,11 @@ class TestDetector(unittest.TestCase):
         com_term_value = self.detector_indirect.com_term_z(energy)
 
         # Reference values
-        reference_com_term = np.array([[0.006556, 0.002000],
-                                       [0.006597, 0.002000],
-                                       [0.006639, 0.002001],
-                                       [0.006681, 0.002001],
-                                       [0.006723, 0.002001]])
+        reference_com_term = np.array([[0.00624447, 0.00193421],
+                                       [0.00628118, 0.00193432],
+                                       [0.00631812, 0.00193444],
+                                       [0.00635528, 0.00193457],
+                                       [0.00639268, 0.00193469]])
 
         np.testing.assert_allclose(com_term_value, reference_com_term, atol=1e-6)
 

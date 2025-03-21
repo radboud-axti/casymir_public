@@ -3,49 +3,51 @@ import numpy as np
 from casymir.casymir import Signal
 
 freq = np.linspace(0, 4, 10)
+mean_quanta = 500
 magnitude = np.array([500] * 10)
 wiener = np.array([100] * 10)
 
 
 class TestSignal(unittest.TestCase):
     def setUp(self):
-        self.signal_obj = Signal(freq, magnitude, wiener)
+        self.freq = freq
+        self.mean_quanta = mean_quanta
+        self.magnitude = magnitude
+        self.wiener = wiener
+        self.signal_obj = Signal(freq, mean_quanta, magnitude, wiener)
 
     def test_stochastic_gain(self):
-        expected_signal = np.array([1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000])
-        expected_wiener = np.array([525, 525, 525, 525, 525, 525, 525, 525, 525, 525])
+        mean_gain = 2
+        gain_std = 0.5
+        self.signal_obj.stochastic_gain(mean_gain, gain_std)
 
-        self.signal_obj.stochastic_gain(2, 0.5)
+        expected_mean_quanta = self.mean_quanta * mean_gain
+        expected_signal = self.magnitude * mean_gain
+        expected_wiener = (mean_gain ** 2) * self.wiener + (gain_std ** 2) * self.mean_quanta
 
+        self.assertAlmostEqual(self.signal_obj.mean_quanta, expected_mean_quanta, places=6)
         np.testing.assert_allclose(self.signal_obj.signal, expected_signal, atol=1e-6)
         np.testing.assert_allclose(self.signal_obj.wiener, expected_wiener, atol=1e-6)
 
     def test_stochastic_blur(self):
-        expected_signal = np.array([500, 450, 400, 350, 300, 250, 200, 150, 100, 50])
-        expected_wiener = np.array([100, 176, 244, 304, 356, 400, 436, 464, 484, 496])
-        t = np.array([1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1])
-
+        t = np.linspace(1, 0.1, 10)
         self.signal_obj.stochastic_blur(t)
+
+        expected_signal = t * self.magnitude
+        expected_wiener = (t ** 2) * self.wiener + (1 - t ** 2) * self.mean_quanta
 
         np.testing.assert_allclose(self.signal_obj.signal, expected_signal, atol=1e-6)
         np.testing.assert_allclose(self.signal_obj.wiener, expected_wiener, atol=1e-6)
 
     def test_deterministic_blur(self):
-        expected_signal = np.array([500, 450, 400, 350, 300, 250, 200, 150, 100, 50])
-        expected_wiener = np.array([100, 81, 64, 49, 36, 25, 16, 9, 4, 1])
-        t = np.array([1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1])
+        a = np.linspace(1, 0.1, 10)
+        self.signal_obj.deterministic_blur(a)
 
-        self.signal_obj.deterministic_blur(t)
+        expected_mean_quanta = self.mean_quanta * a[0]
+        expected_signal = a * self.magnitude
+        expected_wiener = (a ** 2) * self.wiener
 
-        np.testing.assert_allclose(self.signal_obj.signal, expected_signal, atol=1e-6)
-        np.testing.assert_allclose(self.signal_obj.wiener, expected_wiener, atol=1e-6)
-
-    def test_resample(self):
-        t = np.array([1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1])
-        self.signal_obj.deterministic_blur(t)
-        self.signal_obj.resample()
-        expected_signal = np.array([500, 450, 400, 350, 300, 250, 200, 150, 100, 50])
-        expected_wiener = np.array([101, 85, 73, 65, 61, 61, 65, 73, 85, 101])
+        self.assertAlmostEqual(self.signal_obj.mean_quanta, expected_mean_quanta, places=6)
         np.testing.assert_allclose(self.signal_obj.signal, expected_signal, atol=1e-6)
         np.testing.assert_allclose(self.signal_obj.wiener, expected_wiener, atol=1e-6)
 

@@ -203,8 +203,6 @@ def apply_parallel_process(parent_node, signal, detector, spectrum):
                 prob_scaling_b = find_prob_before_lca(prob_history_b, parent_b, common_ancestor)
                 prob_scaling = min(prob_scaling_a, prob_scaling_b)
 
-                print(f"Probability Scaling Factor: {prob_scaling}")
-
                 if common_ancestor.node_type == "Bernoulli":
                     prob = get_lca_probability(common_ancestor, parent_a, parent_b)
                     k_ab = -prob * (1 - prob)

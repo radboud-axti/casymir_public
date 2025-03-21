@@ -28,7 +28,7 @@ python -m pip install -e
 
 This command installs CASYMIR in editable mode and automatically installs dependencies specified in the “setup.py” file.
 
-## 2. Running CASYMR (standalone)
+## 2. Running CASYMIR (standalone)
 CASYMIR can be executed in standalone mode using the following command:
 
 ```
