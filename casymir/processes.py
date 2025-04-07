@@ -86,10 +86,10 @@ def quantum_selection(detector: casymir.casymir.Detector, spectrum: casymir.casy
     QE = detector.get_QE(spectrum.energy)
 
     # Normalized fluence spectrum
-    spec_norm = spectrum.fluence / integrate.simps(spectrum.fluence, spectrum.energy)
+    spec_norm = spectrum.fluence / integrate.simpson(spectrum.fluence, spectrum.energy)
 
     # Mean quantum efficiency
-    g1 = integrate.simps(QE * spec_norm, spectrum.energy)
+    g1 = integrate.simpson(QE * spec_norm, spectrum.energy)
     signal_2 = copy.copy(signal)
     # Apply stochastic gain to the signal
     signal_2.stochastic_gain(g1, np.sqrt(g1 * (1 - g1)))
@@ -145,11 +145,11 @@ def absorption(detector: casymir.casymir.Detector, spectrum: casymir.casymir.Spe
         for k, E1 in enumerate(np.arange(1.1, kV + diffEnergy, diffEnergy)):
             w0, _ = calculate_diff(E1, detector.material)
             com_term = com_term_z[:, k]
-            Ma[k] = integrate.simps(com_term, dx=1) * (1 - xi * w0) * E1 * detector.material["m0"]
+            Ma[k] = integrate.simpson(com_term, dx=1) * (1 - xi * w0) * E1 * detector.material["m0"]
             MaDenom[k] = QE[k] * (1 - xi * w0)
 
     # Mean gain and spread functions associated to the process.
-    gA = integrate.simps(Ma * fluence, energy) / integrate.simps(MaDenom * fluence, energy)
+    gA = integrate.simpson(Ma * fluence, energy) / integrate.simpson(MaDenom * fluence, energy)
     spread = np.ones(np.size(sig.freq))
 
     sig2A = casymir.casymir.Signal(sig.freq, sig.mean_quanta, sig.signal, sig.wiener)
@@ -210,11 +210,11 @@ def local_k_absorption(detector: casymir.casymir.Detector, spectrum: casymir.cas
         for k, E1 in enumerate(np.arange(1.1, kV + diffEnergy, diffEnergy)):
             w0, diff = calculate_diff(E1, detector.material)
             com_term = com_term_z[:, k]
-            Mb[k] = integrate.simps(com_term, dx=1) * prob_k_absorption[k] * detector.material["m0"] * diff
+            Mb[k] = integrate.simpson(com_term, dx=1) * prob_k_absorption[k] * detector.material["m0"] * diff
             MbDenom[k] = QE[k] * prob_k_absorption[k]
 
     # Mean gain and spread functions associated to the process
-    gB = integrate.simps(Mb * fluence, energy) / integrate.simps(MbDenom * fluence, energy)
+    gB = integrate.simpson(Mb * fluence, energy) / integrate.simpson(MbDenom * fluence, energy)
     spread = np.ones(np.size(sig.freq))
 
     sig2B = casymir.casymir.Signal(sig.freq, sig.mean_quanta, sig.signal, sig.wiener)
@@ -273,11 +273,11 @@ def remote_k_absorption(detector: casymir.casymir.Detector, spectrum: casymir.ca
         for k, E1 in enumerate(np.arange(1.1, kV + diffEnergy, diffEnergy)):
             w0, _ = calculate_diff(E1, detector.material)
             com_term = com_term_z[:, k]
-            Mc[k] = integrate.simps(com_term, dx=1) * xi * w0 * detector.fk * ek * detector.material["m0"]
+            Mc[k] = integrate.simpson(com_term, dx=1) * xi * w0 * detector.fk * ek * detector.material["m0"]
             McDenom[k] = QE[k] * xi * w0 * detector.fk
 
     # Mean gain associated to this process
-    gC = integrate.simps(Mc * fluence, energy) / integrate.simps(McDenom * fluence, energy)
+    gC = integrate.simpson(Mc * fluence, energy) / integrate.simpson(McDenom * fluence, energy)
 
     sig2C = copy.copy(sig)
     fk = detector.fk
