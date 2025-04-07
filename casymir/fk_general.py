@@ -86,7 +86,7 @@ def fk(thickness: float, mat: dict, w_hZ: float = 1) -> float:
         Pix is given by the summation over the 2m solid-angle elements.
         """
 
-        Pix[i] = integrate.simps(P0, solid_angle)
+        Pix[i] = integrate.simpson(P0, solid_angle)
 
     # PF calculation
     PF1 = np.zeros(n)
@@ -124,6 +124,6 @@ def fk(thickness: float, mat: dict, w_hZ: float = 1) -> float:
     Summation of a PFix over the n layers yields the total probability of Kx fluorescence, PFx.
     And the probability of Kx reabsorption per Kx photon emitted, fk, is given by:
     """
-    f_k = integrate.simps(Pix * PF3) / integrate.simps(PF3)
+    f_k = integrate.simpson(Pix * PF3) / integrate.simpson(PF3)
 
     return f_k
