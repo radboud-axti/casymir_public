@@ -23,8 +23,6 @@ Auxiliary functions:
 - get_cached_QE: Retrieves cached Quantum Efficiency (QE) values to avoid redundant calculations.
 """
 from typing import Tuple, Union, Any
-
-from matplotlib import pyplot as plt
 from numpy.core.multiarray import ndarray
 
 import casymir.casymir
