@@ -150,9 +150,6 @@ def apply_parallel_process(parent_node, signal, detector, spectrum):
     :return: The modified signal after applying all branches, including cross-spectral terms.
     """
 
-    print("Parallel path combination begins here")
-    print("-------------------------------------")
-
     # Extract paths, probability history, and parent nodes
     paths = extract_paths(parent_node)
     path_signals = []
@@ -171,7 +168,6 @@ def apply_parallel_process(parent_node, signal, detector, spectrum):
         path_probs.append(cumulative_prob)
         path_parents.append(parent)
         path_prob_histories.append(prob_history)
-        print("{}: {}, Probability History: {}, Cumulative Prob: {}".format(path.name, path.processes, prob_history, cumulative_prob))
 
     # Initialize combined Signal
     combined_signal = copy.copy(signal)
@@ -195,8 +191,6 @@ def apply_parallel_process(parent_node, signal, detector, spectrum):
             common_ancestor = find_lowest_common_ancestor(parent_a, parent_b)
 
             if common_ancestor is not None:
-                print(
-                    f"Lowest common ancestor of {path_a.processes} and {path_b.processes} is {common_ancestor.name}")
 
                 # Locate the probability history entry corresponding to the last probability BEFORE the common ancestor
                 prob_scaling_a = find_prob_before_lca(prob_history_a, parent_a, common_ancestor)
@@ -206,12 +200,10 @@ def apply_parallel_process(parent_node, signal, detector, spectrum):
                 if common_ancestor.node_type == "Bernoulli":
                     prob = get_lca_probability(common_ancestor, parent_a, parent_b)
                     k_ab = -prob * (1 - prob)
-                    print(f"Cross covariance is: {k_ab}")
                     W_ab = - path_gains[i] * path_gains[j] * path_transfers[i] * path_transfers[j] * k_ab \
                            * (signal.wiener * prob_scaling - signal.mean_quanta * prob_scaling)
 
                 elif common_ancestor.node_type == "Fork":
-                    print("Cross covariance is 0 (Fork Branch)")
                     W_ab = path_gains[i] * path_gains[j] * path_transfers[i] * path_transfers[
                         j] * signal.wiener * prob_scaling
 

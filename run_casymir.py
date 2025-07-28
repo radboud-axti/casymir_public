@@ -80,7 +80,7 @@ def run_simulation(system, spec_name, kV, mAs, detector_type, fit='Y'):
         sig, _, _ = casymir.processes.optical_coupling(det, spec, sig)
 
     sig, _, _ = casymir.processes.q_integration(det, sig)
-    sig = casymir.processes.aliasing(det, sig)
+    sig = casymir.processes.noise_aliasing(det, sig)
     sig = casymir.processes.model_output(det, sig)
 
     if fit == 'Y':

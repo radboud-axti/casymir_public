@@ -23,6 +23,8 @@ Auxiliary functions:
 - get_cached_QE: Retrieves cached Quantum Efficiency (QE) values to avoid redundant calculations.
 """
 from typing import Tuple, Union, Any
+
+from matplotlib import pyplot as plt
 from numpy.core.multiarray import ndarray
 
 import casymir.casymir
@@ -83,7 +85,7 @@ def quantum_selection(detector: casymir.casymir.Detector, spectrum: casymir.casy
     :return: Tuple with updated CASYMIR Signal object, mean gain, and spread function.
     """
     # Quantum Efficiency (QE) for the given energy spectrum
-    QE = detector.get_QE(spectrum.energy)
+    QE = get_cached_QE(detector, spectrum.energy)
 
     # Normalized fluence spectrum
     spec_norm = spectrum.fluence / integrate.simpson(spectrum.fluence, spectrum.energy)
@@ -152,8 +154,18 @@ def absorption(detector: casymir.casymir.Detector, spectrum: casymir.casymir.Spe
     gA = integrate.simpson(Ma * fluence, energy) / integrate.simpson(MaDenom * fluence, energy)
     spread = np.ones(np.size(sig.freq))
 
+    mu1 = Ma
+    mu2 = mu1 ** 2 + mu1
+    valid = mu1 > 0
+
+    Ia = calculate_effective_swank(energy[valid], fluence[valid], QE[valid], mu1[valid], mu2[valid])
+
+    swank_eff = Ia
+    excess = gA * ((1 / swank_eff) - 1) - 1
+    var_A = gA * (excess + 1)
+
     sig2A = casymir.casymir.Signal(sig.freq, sig.mean_quanta, sig.signal, sig.wiener)
-    sig2A.stochastic_gain(gA, np.sqrt(gA))
+    sig2A.stochastic_gain(gA, np.sqrt(var_A))
 
     sig3 = copy.copy(sig)
     sig3.mean_quanta = sig2A.mean_quanta
@@ -197,6 +209,11 @@ def local_k_absorption(detector: casymir.casymir.Detector, spectrum: casymir.cas
     diffEnergy = float(energy[1] - energy[0])
     kV = spectrum.kV
 
+    if spectrum.kV <= detector.material["ek"]:
+        print("[Local K Absorption] Spectrum below K-edge → no contribution.")
+        spread = np.ones(np.size(sig.freq))
+        return copy.copy(sig), 0.0, spread
+
     if detector.type == "direct":
         Mb, MbDenom = [np.zeros(np.shape(energy)) for _ in range(2)]
         for k, E1 in enumerate(np.arange(1.1, kV + diffEnergy, diffEnergy)):
@@ -217,8 +234,18 @@ def local_k_absorption(detector: casymir.casymir.Detector, spectrum: casymir.cas
     gB = integrate.simpson(Mb * fluence, energy) / integrate.simpson(MbDenom * fluence, energy)
     spread = np.ones(np.size(sig.freq))
 
+    mu1 = Mb
+    mu2 = mu1 ** 2 + mu1
+    valid = mu1 > 0
+
+    Ib = calculate_effective_swank(energy[valid], fluence[valid], QE[valid], mu1[valid], mu2[valid])
+
+    swank_eff = Ib
+    excess = gB * ((1 / swank_eff) - 1) - 1
+    var_B = gB * (excess + 1)
+
     sig2B = casymir.casymir.Signal(sig.freq, sig.mean_quanta, sig.signal, sig.wiener)
-    sig2B.stochastic_gain(gB, np.sqrt(gB))
+    sig2B.stochastic_gain(gB, np.sqrt(var_B))
 
     sig3 = copy.copy(sig)
     sig3.mean_quanta = sig2B.mean_quanta
@@ -260,6 +287,11 @@ def remote_k_absorption(detector: casymir.casymir.Detector, spectrum: casymir.ca
     diffEnergy = float(energy[1] - energy[0])
     kV = spectrum.kV
 
+    if spectrum.kV <= detector.material["ek"]:
+        print("[Remote K Absorption] Spectrum below K-edge → no contribution.")
+        spread = np.ones(np.size(sig.freq))
+        return copy.copy(sig), 0.0, spread
+
     if detector.type == "direct":
         Mc, McDenom = [np.zeros(np.shape(energy)) for _ in range(2)]
         for k, E1 in enumerate(np.arange(1.1, kV + diffEnergy, diffEnergy)):
@@ -279,11 +311,21 @@ def remote_k_absorption(detector: casymir.casymir.Detector, spectrum: casymir.ca
     # Mean gain associated to this process
     gC = integrate.simpson(Mc * fluence, energy) / integrate.simpson(McDenom * fluence, energy)
 
+    mu1 = Mc
+    mu2 = mu1 ** 2 + mu1
+    valid = mu1 > 0
+
+    Ic = calculate_effective_swank(energy[valid], fluence[valid], QE[valid], mu1[valid], mu2[valid])
+
+    swank_eff = Ic
+    excess = gC * ((1 / swank_eff) - 1) - 1
+    var_C = gC * (excess + 1)
+
     sig2C = copy.copy(sig)
     fk = detector.fk
-    sig2C.stochastic_gain(fk, np.sqrt(fk*(1-fk)))
+    sig2C.stochastic_gain(fk, np.sqrt(fk * (1 - fk)))
     sig2C.stochastic_blur(tk)
-    sig2C.stochastic_gain(gC, np.sqrt(gC))
+    sig2C.stochastic_gain(gC, np.sqrt(var_C))
 
     return sig2C, gC * detector.fk, tk
 
@@ -432,7 +474,7 @@ def q_integration(detector: casymir.casymir.Detector, sig: casymir.casymir.Signa
     return signal_2, detector.pxa, ta
 
 
-def aliasing(detector: casymir.casymir.Detector, sig: casymir.casymir.Signal) -> casymir.casymir.Signal:
+def noise_aliasing(detector: casymir.casymir.Detector, sig: casymir.casymir.Signal) -> casymir.casymir.Signal:
     """
     Apply aliasing to the Wiener spectrum of a signal object.
 
@@ -493,7 +535,7 @@ def model_output(detector: casymir.casymir.Detector, signal: casymir.casymir.Sig
     add_noise = detector.add_noise
 
     # Apply electronic noise to the Wiener spectrum (NPS) using the entire pixel area
-    wiener2 = signal.wiener[0:int(signal.length / 2)] + ((add_noise ** 2) * (detector.pxa/detector.ff))
+    wiener2 = signal.wiener[0:int(signal.length / 2)] + ((add_noise ** 2) * (detector.pxa / detector.ff))
     signal2 = signal.signal[0:int(signal.length / 2)]
 
     # Frequency vector up to Nyquist frequency
@@ -529,7 +571,21 @@ def get_cached_QE(detector, energy):
     Checks whether the Detector's Quantum Efficiency attribute is already present, to avoid unnecessary calls to the
     get_QE() method.
     """
-    if detector.QE.size == 0:
+    if detector.QE is None or not isinstance(detector.QE, np.ndarray) or detector.QE.size == 0:
         detector.get_QE(energy)
     return detector.QE
 
+
+def calculate_effective_swank(energy: np.ndarray, fluence: np.ndarray,
+                              QE: np.ndarray, mu1: np.ndarray, mu2: np.ndarray) -> float:
+    """
+    Calculates the effective Swank factor by integrating the absorbed-spectrum-weighted gain moments.
+    """
+    absorbed = fluence * QE
+    norm = integrate.simpson(absorbed, energy)
+
+    absorbed_pdf = absorbed / norm
+
+    num = integrate.simpson(mu1 * absorbed_pdf, energy) ** 2
+    denom = integrate.simpson(mu2 * absorbed_pdf, energy)
+    return num / denom
