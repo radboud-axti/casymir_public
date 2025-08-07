@@ -1,0 +1,22 @@
+[project]
+name = "casymir"
+version = "1.0.0"
+description = ""
+authors = [
+    {name = "Gustavo Pacheco", email = "Gustavo.Pachecoguevara@radboudumc.nl" },
+    {name = "Pim van den Berg", email = "Pim.vandenBerg@radboudumc.nl"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy (>=2.2.4,<3.0.0)",
+    "scipy (>=1.15.2,<2.0.0)",
+    "spekpy (>=2.0.13,<3.0.0)",
+    "xraydb (>=4.5.6,<5.0.0)",
+    "pyyaml (>=6.0.2,<7.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

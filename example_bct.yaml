@@ -1,20 +1,20 @@
 system_id: example bct
-description: Test bCT system
+description: Example bCT system based on a Koning bCT
 
 detector:
   type: indirect
   active_layer: CsI
   px_size: 0.1518
-  ff: 0.83
-  thick: 700
-  layer: 7
+  ff: 0.85
+  thickness: 700
+  trapping_depth: 0
   elems: 256
   add_noise: 100
-  extra_materials: [(Al, 0.05), (Carbon Fiber, 2.5), (Silica, 1)]
+  extra_materials: [(Carbon Fiber, 2.5), (Silicon Dioxide, 1)]
 
 source:
   target_angle: 10
   target: W
   SID: 95
-  filter: [(Be, 1.4), (Al, 1.42), (Al, 0.044)]
+  filter: [(Be, 1.4), (Al, 1.514)]
   external_filter: [(Al, 10), (Air, 950)]

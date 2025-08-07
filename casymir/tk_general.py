@@ -217,7 +217,7 @@ def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
     """
 
     for mu in np.linspace(low, high, num=dim, endpoint=True):
-        csf_array[k] = 2 * np.pi * integrate.simps(CSF * (ss.j0(2 * np.pi * mu * finalrarray)) * finalrarray,
+        csf_array[k] = 2 * np.pi * integrate.simpson(CSF * (ss.j0(2 * np.pi * mu * finalrarray)) * finalrarray,
                                                    finalrarray)
         x_axis[k] = mu
         k = k + 1
