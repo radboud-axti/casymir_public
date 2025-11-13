@@ -16,7 +16,7 @@ Classes:
 
 - Signal: Stores frequency vector, magnitude, and wiener spectrum for the propagated signals.
 """
-from typing import Tuple, Any
+from typing import Tuple, Any, Iterator, Iterable
 
 from scipy.optimize import curve_fit
 import xraydb as xrdb
@@ -24,6 +24,8 @@ import spekpy as sp
 import numpy as np
 import yaml
 from importlib import resources
+
+from typing import Sequence, Optional
 
 from casymir import fk_general
 from casymir import tk_general
@@ -724,3 +726,130 @@ class Signal:
                   ", ".join(f"c{i + 1}={p:.5E}" for i, p in enumerate(popt_nps)))
 
         return popt_mtf, popt_nps
+
+
+class SignalND:
+    """
+    Signal container for 2D/3D models.
+    Convention for 2D:
+        x -> rows (axis 0)
+        y -> cols (axis 1)
+    Frequency axes fx, fy are centered in [-f_max, f_max), zero at index N//2.
+    """
+    def __init__(self, axes: Sequence[np.ndarray], S: np.ndarray, W: np.ndarray, mean_quanta: float):
+        self.axes = [np.asarray(a) for a in axes]
+        self.grids = np.meshgrid(*self.axes, indexing="ij")
+        self.S = np.asarray(S)
+        self.W = np.asarray(W)
+        self.mean_quanta = float(mean_quanta)
+        self.mtf: Optional[np.ndarray]  = None
+        self.nnps: Optional[np.ndarray] = None
+        self._cidx = tuple(len(ax)//2 for ax in self.axes)
+
+    @property
+    def ndim(self) -> int:
+        return len(self.axes)
+
+    @property
+    def fx(self) -> np.ndarray:  # row freq
+        return self.axes[0]
+
+    @property
+    def fy(self) -> np.ndarray:  # col freq
+        return self.axes[1]
+
+    @property
+    def FX(self) -> np.ndarray:
+        return self.grids[0]
+
+    @property
+    def FY(self) -> np.ndarray:
+        return self.grids[1]
+
+    def deterministic_blur(self, A: np.ndarray) -> None:
+        """
+        Apply the deterministic blur transfer function to a SignalND object.
+        """
+        A = np.asarray(A)
+        mean_quanta_2 = float(A[self._cidx])
+        signal_2 = A * self.S
+        wiener_2 = (A ** 2) * self.W
+        self.mean_quanta = mean_quanta_2
+        self.S = signal_2
+        self.W = wiener_2
+
+    def stochastic_gain(self, g: float, g_std: float) -> None:
+        """
+        Apply the stochastic gain transfer function to a SignalND object.
+        """
+        mean_quanta_2 = g * self.mean_quanta
+        signal_2 = g * self.S
+        wiener_2 = ((g ** 2) * self.W) + ((g_std ** 2) * self.mean_quanta)
+        self.mean_quanta = mean_quanta_2
+        self.S = signal_2
+        self.W = wiener_2
+
+
+class SignalStack:
+    def __init__(self, fx:np.ndarray, fy:np.ndarray, Nv:int, angles_rad:np.ndarray, dtype:np.dtype=np.float32):
+        self.fx = np.asarray(fx).copy()
+        self.fy = np.asarray(fy).copy()
+        self.Nv = int(Nv)
+        self.angles = np.asarray(angles_rad, dtype=float)
+        self.dtype = np.dtype(dtype)
+        self._next = 0
+        Nx, Ny = len(self.fx), len(self.fy)
+        self.S = np.zeros((Nv, Nx, Ny), dtype=self.dtype)
+        self.W = np.zeros((Nv, Nx, Ny), dtype=self.dtype)
+        self.mean_quanta = np.zeros(Nv, dtype=float)
+
+    def append(self, signal: SignalND, angle_rad: float) -> int:
+        if self._next >= self.Nv:
+            raise IndexError("Stack is full")
+        i = self._next
+        self.S[i, :, :] = signal.S.astype(self.dtype, copy=False)
+        self.W[i, :, :] = signal.W.astype(self.dtype, copy=False)
+        self.mean_quanta[i] = float(getattr(signal, "mean_quanta", 0.0))
+        self.angles[i] = float(angle_rad)
+        self._next += 1
+        return i
+
+    def add_view_arrays(self, i:int, S2d:np.ndarray, W2d:np.ndarray, angle_rad:float, mean_quanta:float=0.0) -> None:
+        self.S[i, :, :] = S2d.astype(self.dtype, copy=False)
+        self.W[i, :, :] = W2d.astype(self.dtype, copy=False)
+        self.mean_quanta[i] = float(mean_quanta)
+        self.angles[i] = float(angle_rad)
+
+    def __len__(self) -> int:
+        return self.Nv
+
+    def view(self, i:int) -> SignalND:
+        sig = SignalND([self.fx, self.fy], self.S[i], self.W[i], float(self.mean_quanta[i]))
+        return sig
+
+    def iter_views(self) -> Iterator[Tuple[int, SignalND]]:
+        for i in range(self.Nv):
+            yield i, self.view(i)
+
+    def deterministic_blur_stack(self, H) -> None:
+        if isinstance(H, np.ndarray):
+            HH = H.astype(self.dtype, copy=False)
+            for i in range(self.Nv):
+                S_filtered = self.S[i] * HH
+                W_filtered = self.W[i] * (HH ** 2)
+                self.S[i] = S_filtered
+                self.W[i] = W_filtered
+        else:
+            for i, Hi in enumerate(H):
+                Hi = Hi.astype(self.dtype, copy=False)
+                S_filtered = self.S[i] * Hi
+                W_filtered = self.W[i] * (Hi ** 2)
+                self.S[i] = S_filtered
+                self.W[i] = W_filtered
+
+
+
+
+
+
+

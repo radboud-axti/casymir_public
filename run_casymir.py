@@ -102,7 +102,7 @@ def run_standalone_simulation():
     parser.add_argument('mAs', type=positive_float, help='Tube current-time product in mAs')
     parser.add_argument('--output_file', '-of', type=str, default='output.csv',
                         help='Output CSV file path')
-    parser.add_argument('--print_fit', '-pf', choices=['Y', 'N'], default='N',
+    parser.add_argument('--print_fit', '-pf', choices=['Y', 'N'], default='Y',
                         help='Print fit parameters for MTF and NNPS')
 
     args = parser.parse_args()
