@@ -3,7 +3,7 @@
 ## Introduction
 
 CASYMIR is a generalized cascaded linear model to describe the spatial resolution and noise propagation characteristics of x-ray detectors. It employs linear systems theory to model the different gain and blurring stages within the detector. The key feature of CASYMIR is its flexibility in terms of detector designs and system geometries.
-Technical details of the implementation can be found in [references].
+Technical details of the implementation can be found in Pacheco G, Pautasso JJ, Michielsen K, Sechopoulos I. Software Article: A generalized cascaded linear system model implementation for x-ray detectors. Med Phys. 2025; 52:e18079. https://doi.org/10.1002/mp.18079.
 
 ## Requirements
 

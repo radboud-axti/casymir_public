@@ -1,6 +1,4 @@
 from typing import Tuple
-from numpy.core.multiarray import ndarray
-
 import casymir.casymir
 import casymir.parallel
 from casymir.casymir import Signal, SignalND, Detector
@@ -20,6 +18,7 @@ def _make_freq_grid_2d(f1d: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     FX, FY = np.meshgrid(f1d, f1d, indexing="xy")
     return FX, FY
 
+
 def _lift_1d_to_2d_isotropic_centered(sig, FX: np.ndarray, FY: np.ndarray):
     R = np.sqrt(FX**2 + FY**2)
     f1d = sig.freq
@@ -28,6 +27,7 @@ def _lift_1d_to_2d_isotropic_centered(sig, FX: np.ndarray, FY: np.ndarray):
     S2d = np.interp(Rclip, f1d, S1d)
     W2d = np.interp(Rclip, f1d, W1d)
     return S2d, W2d
+
 
 def _bilinear_sample2d(W: np.ndarray, fx: np.ndarray, fy: np.ndarray,
                        FXq: np.ndarray, FYq: np.ndarray) -> np.ndarray:
@@ -58,34 +58,29 @@ def _bilinear_sample2d(W: np.ndarray, fx: np.ndarray, fy: np.ndarray,
     return (1 - ty) * V0 + ty * V1
 
 
+
 def _default_harmonic_limits(fmax: float, fs: float) -> int:
     return int(np.ceil(abs(fmax) / abs(fs)))
 
-# --- main block ------------------------------------------------------------
 
 def integration_2d(detector, sig) -> Tuple[SignalND, float, np.ndarray]:
     """
     Quantum integration (2D).
     Convention: x=rows, y=cols.
     """
-    # 1) Centered axes from 1D freq axis
     fx_c = centered_axis_from_nonneg(sig.freq)
     fy_c = fx_c.copy()  # for square detector elements
 
-    # 2) 2D grid (shapes: FX, FY -> (Nx, Ny))
     FX, FY = np.meshgrid(fx_c, fy_c, indexing="ij")
 
-    # 3) Lift the 1D spectra isotropically
     S2d, W2d = _lift_1d_to_2d_isotropic_centered(sig, FX, FY)
 
-    # 4) Pixel aperture transfer function (centered)
     a_pd = np.sqrt(detector.pxa)
     Tpx_2d = np.sinc(a_pd * FX) * np.sinc(a_pd * FY)
 
-    # 5) Create centered SignalND
     sig2d = SignalND(axes=[fx_c, fy_c], S=S2d, W=W2d, mean_quanta=sig.mean_quanta)
 
-    # 6) Apply pixel blur and deterministic gain
+    # Apply pixel blur and deterministic gain
     sig2d.deterministic_blur(Tpx_2d)
     sig2d.stochastic_gain(detector.pxa, 0.0)
 
@@ -100,22 +95,7 @@ def noise_aliasing_2d(
 ) -> SignalND:
     """
     2D Dirac-comb aliasing (centered coords, x=rows, y=cols).
-    S is unchanged. W becomes the aliased sum of shifted *pre-sampling* W.
-
-    Parameters
-    ----------
-    detector : CASYMIR Detector (supports px_size or px_size_x/px_size_y)
-    sig2d_pre : SignalND
-        Centered SignalND with axes=[fx, fy] (x=rows, y=cols). W is pre-sampling.
-        Shape: (Nx, Ny).
-    Kx, Ky : int or None
-        Number of harmonics to each side in x and y (i.e., k in [-K, ...,+K]).
-        If None, chosen from fmax and sampling frequency.
-
-    Returns
-    -------
-    SignalND
-        New SignalND on the same grid with W aliased (S copied).
+    S is unchanged. W becomes the aliased sum of shifted pre-sampling W.
     """
     assert sig2d_pre.ndim == 2, "noise_aliasing_2d_centered expects a 2D SignalND."
 
@@ -141,14 +121,11 @@ def noise_aliasing_2d(
 
     for kx in range(-Kx, Kx + 1):
         for ky in range(-Ky, Ky + 1):
-            # query points for this harmonic
             FXq = FX + kx * fsx
             FYq = FY + ky * fsy
-            # sample the pre-sampling W at shifted coords (bilinear on the centered grid)
             W_shift = _bilinear_sample2d(Wpre, fx, fy, FXq, FYq)
             W_alias += W_shift
 
-    # package result
     out = SignalND(axes=[fx, fy], S=sig2d_pre.S.copy(), W=W_alias, mean_quanta=sig2d_pre.mean_quanta)
     out.mtf  = sig2d_pre.mtf
     out.nnps = None
@@ -163,36 +140,11 @@ def focal_spot_blur(
     inplace: bool = False,
 ):
     """
-    Apply 2D focal-spot motion blur as a deterministic stage on a CENTERED grid.
-
-    H_FSB(f_parallel) = sinc(a1 * f_parallel),
-      where f_parallel = projection of (fx,fy) onto the tube-motion direction.
-
-    Parameters
-    ----------
-    sig2d : SignalND
-        Centered 2D signal with axes=[fx, fy] (x=rows, y=cols).
-    direction : {"x","y"}, default "x"
-        Axis-aligned tube-motion direction. Ignored if angle_rad is provided.
-    angle_rad : float, optional
-        Motion direction angle in the (x,y) plane measured from +x
-        toward +y. If given, overrides `direction`.
-    inplace : bool, default False
-        If True, blur is applied in-place to `sig2d`. Otherwise a new object is returned.
-
-    Returns
-    -------
-    out_sig : SignalND
-        Signal with FSB applied (same grid).
-    H_fsb : np.ndarray
-        The focal-spot blur transfer function sampled on the grid.
-    a1_used : float
-        The a1 value actually used [mm].
+    Apply 2D focal-spot motion blur as a deterministic blur stage.
     """
     if sig2d.ndim != 2:
         raise ValueError("focal_spot_blur_2d expects a 2D SignalND.")
 
-    # motion direction unit vector u = (ux, uy)
     if angle_rad is not None:
         ux = np.cos(angle_rad)
         uy = np.sin(angle_rad)
@@ -204,11 +156,9 @@ def focal_spot_blur(
         else:
             raise ValueError("direction must be 'x' or 'y' when angle_rad is not provided.")
 
-    # projection of (fx, fy) onto motion direction
     FX, FY = sig2d.FX, sig2d.FY
     f_parallel = ux * FX + uy * FY
 
-    # deterministic frequency response
     H_fsb = np.sinc(a1 * f_parallel)
 
     if inplace:
@@ -229,39 +179,21 @@ def beam_obliquity_blur_2d(
     spectrum,
     detector,
     theta_rad: float,
-    use_complex_phase: bool = False,   # False -> magnitude-only blur
+    use_complex_phase: bool = False,
     inplace: bool = False,
 ):
     """
     Apply beam-obliquity blur along x (rows)
-
-    Parameters
-    ----------
-    sig2d : centered SignalND with axes=[fx, fy] (x=rows, y=cols)
-    spectrum : casymir.casymir.Spectrum (provides .energy [keV], .fluence)
-    detector : casymir.casymir.Detector (provides μ via get_mu and material props)
-    theta_rad : obliquity angle from normal [rad]
-    d_mm : physical converter thickness [mm] (e.g., a-Se thickness or trapping depth)
-    use_complex_phase : if True, apply complex T (includes lateral phase); else |T|
-    inplace : if True, modify sig2d; else return a new SignalND
-
-    Returns
-    -------
-    out_sig : SignalND
-    H_obl   : np.ndarray (Nx, 1) expanded along columns
-    T_line  : np.ndarray (Nx,) complex (unexpanded 1D response vs fx)
     """
     if sig2d.ndim != 2:
         raise ValueError("beam_obliquity_blur_2d_from_spectrum expects a 2D SignalND.")
 
-    # 1) compute T_theta(fx) from spectrum + detector
     d_mm = detector.thickness / 1000
     T_line = _obliquity_T_fx(sig2d.fx, theta_rad, d_mm, spectrum, detector)
-    H_line = T_line if use_complex_phase else np.abs(T_line)  # (Nx,)
+    H_line = T_line if use_complex_phase else np.abs(T_line)
 
     H_obl = H_line[:, None]
 
-    # 3) apply to SIGNAL only
     if inplace:
         out = sig2d
     else:
@@ -288,14 +220,14 @@ def _linear_mu_mm_from_detector(detector, E_keV: np.ndarray) -> np.ndarray:
 
 
 def _obliquity_T_fx(
-    fx_c: np.ndarray,         # centered row-frequency axis [mm^-1]
-    theta_rad: float,         # obliquity (from normal) [rad]
-    d_mm: float,              # converter thickness [mm]
-    spectrum,                 # casymir.casymir.Spectrum
-    detector                  # casymir.casymir.Detector
+    fx_c: np.ndarray,
+    theta_rad: float,
+    d_mm: float,
+    spectrum,
+    detector
 ) -> np.ndarray:
     """
-    Compute T_theta(fx) (complex) using spectrum.energy / spectrum.fluence and detector μ(E).
+    Compute T_theta(fx) using spectrum.energy / spectrum.fluence and detector μ(E).
     """
     E  = np.asarray(spectrum.energy,  dtype=float)          # keV
     Phi= np.asarray(spectrum.fluence, dtype=float)          # (photons / cm^2 / keV)
@@ -305,9 +237,9 @@ def _obliquity_T_fx(
     MU = mu[:, None]
     FX = fx_c[None, :]
 
-    tprime = d_mm / np.cos(theta_rad)                       # mm
-    alpha  = 2.0 * np.pi * FX * tprime * np.tan(theta_rad)  # unitless
-    beta   = 2.0 * np.pi * FX * np.sin(theta_rad) / MU      # unitless
+    tprime = d_mm / np.cos(theta_rad)
+    alpha  = 2.0 * np.pi * FX * tprime * np.tan(theta_rad)
+    beta   = 2.0 * np.pi * FX * np.sin(theta_rad) / MU
 
     Ew = (E * Phi)[:, None]
 
@@ -340,24 +272,6 @@ def log_transform_2d(
     return sig2d, gain_factor
 
 
-def polar_fields_2d(sig2d: SignalND):
-    """
-    Build polar fields on the centered Cartesian grid.
-    Returns:
-        FR   : radial frequency (sqrt(fx^2 + fy^2)) [mm^-1], shape == S/W
-        THETA: angle atan2(fy, fx) in radians, [-pi, pi]
-    """
-    FX, FY = sig2d.FX, sig2d.FY
-    FR = np.sqrt(FX**2 + FY**2)
-    THETA = np.arctan2(FY, FX)
-    return FR, THETA
-
-
-def _polar_fr(sig2d: SignalND) -> np.ndarray:
-    FX, FY = sig2d.FX, sig2d.FY
-    return np.sqrt(FX**2 + FY**2)
-
-
 def _fr_on_plane(sig2d: SignalND, theta_i_rad: float) -> np.ndarray:
     """
     DBT per-view radial frequency in the rotation plane: f_r = f_x / cos(theta_i).
@@ -380,19 +294,20 @@ def _wrap_to_band(x: np.ndarray, half_width: float) -> np.ndarray:
 
 
 def ramp_filter_dbt(sig2d: SignalND, *, detector, theta_total_rad: float, theta_i_rad: float) -> np.ndarray:
+
     px = getattr(detector, "px_size_x", getattr(detector, "px_size", None))
     if px is None:
         raise ValueError("Detector must define px_size (or px_size_x).")
-    fny = 1.0 / (2.0 * float(px))           # detector Nyquist along x
+    fny = 1.0 / (2.0 * float(px))
 
     c = np.cos(theta_i_rad)
-    fr_ny = fny / c                          # view-dependent radial Nyquist
+    fr_ny = fny / c
 
-    FR = _fr_on_plane(sig2d, theta_i_rad)    # = FX / cos(theta_i)
-    FRm = _wrap_to_band(FR, fr_ny)           # periodic replication (period 2*fr_ny)
+    FR = _fr_on_plane(sig2d, theta_i_rad)
+    FRm = _wrap_to_band(FR, fr_ny)
 
     scale = 2.0 * np.tan(theta_total_rad) / fr_ny
-    H = scale * np.abs(FRm)                  # varies only along x
+    H = scale * np.abs(FRm)
     return H
 
 
@@ -405,7 +320,7 @@ def apply_ramp_filter_dbt(
     inplace: bool = False,
 ):
     """
-    Convenience wrapper: build H_RA(fr) and apply as deterministic blur to S and W.
+    Build H_RA(fr) and apply as deterministic blur.
     """
     H = ramp_filter_dbt(sig2d, detector=detector, theta_total_rad=theta_total_rad, theta_i_rad=theta_i_rad)
 
@@ -449,7 +364,7 @@ def apply_sa_filter_dbt(
     inplace: bool = False,
 ):
     """
-    Convenience wrapper: build H_SA(fr) and apply as deterministic blur to S and W.
+    Build H_SA(fr) and apply as deterministic blur.
     """
     H = spectrum_apodization_filter(sig2d, detector=detector, theta_i_rad=theta_i_rad, A=A)
 
@@ -474,14 +389,15 @@ def interpolation_filter_bilinear(
     theta_i_rad: float = 0.0,
     power: int = 2
 ) -> np.ndarray:
+
     FX, FY = sig2d.FX, sig2d.FY
-    FR = _fr_on_plane(sig2d, theta_i_rad)    # <-- key change
+    FR = _fr_on_plane(sig2d, theta_i_rad)
 
     if (a_x is not None) and (a_y is not None):
         s_r = float(a_x)
         s_y = float(a_y)
     elif (m_x is not None) and (m_y is not None):
-        s_r = np.cos(theta_i_rad) * float(m_x)  # cos(theta)*m_x
+        s_r = np.cos(theta_i_rad) * float(m_x)
         s_y = float(m_y)
     else:
         raise ValueError("Provide either (a_x, a_y) or (m_x, m_y).")
@@ -506,7 +422,7 @@ def apply_interpolation_filter_bilinear_dbt(
     inplace: bool = False,
 ):
     """
-    Build H_IN and apply as a deterministic blur stage (S *= H, W *= |H|^2).
+    Build H_IN and apply as a deterministic blur stage.
     """
     a_x = detector.px_size
     a_y = detector.px_size
@@ -528,97 +444,3 @@ def apply_interpolation_filter_bilinear_dbt(
     out.deterministic_blur(H)
     return out, H
 
-
-def slice_thickness_filter_fz(
-    fz_axis: np.ndarray,
-    *,
-    fr_ny: float,
-    theta_total_rad: float,
-    B: float = 0.05
-) -> np.ndarray:
-    """
-    H_ST(fz) = 0.5[1 + cos(pi * fz / (B * fr_ny))] for |fz| <= min(B*fr_ny, tan(Θ)*fr_ny); 0 elsewhere.
-    """
-    fz = np.asarray(fz_axis)
-    # band limits
-    limit_band = B * fr_ny
-    limit_geom = np.tan(theta_total_rad) * fr_ny
-    limit = min(limit_band, limit_geom)
-
-    r = np.abs(fz) / (limit if limit > 0 else np.inf)
-
-    H = np.zeros_like(fz, dtype=float)
-    inside = r <= 1.0
-    H[inside] = 0.5 * (1.0 + np.cos(np.pi * r[inside]))
-    return H
-
-def make_fz_axis(Nz: int, dz_mm: float) -> np.ndarray:
-    return np.fft.fftshift(np.fft.fftfreq(Nz, d=dz_mm))
-
-def Hst_per_view_1d(fz_axis: np.ndarray, detector, theta_i_rad: float, B: float = 0.05) -> np.ndarray:
-    """
-    H_ST(fz) = 0.5*(1+cos(pi*fz/L)),  |fz|<=L, else 0
-    with L = min(B*fr_Nyq, tan|θ_i| * fr_Nyq), fr_Nyq = 1/(2*px_size).
-    """
-    px = getattr(detector, "px_size_x", getattr(detector, "px_size"))
-    fr_ny = 1.0 / (2.0 * float(px))
-    L = min(B * fr_ny, np.tan(abs(theta_i_rad)) * fr_ny)
-    H = np.zeros_like(fz_axis, dtype=np.float32)
-    if L <= 0:
-        return H
-    m = np.abs(fz_axis) <= L
-    x = fz_axis[m] / L
-    H[m] = 0.5 * (1.0 + np.cos(np.pi * x))
-    return H
-
-def map_stack_to_3d_minimal(
-    stack,
-    detector,
-    theta_total_rad: float,
-    fz_axis: np.ndarray,
-    B: float = 0.05,
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    """
-    Nv, Nx, Ny = stack.S.shape
-    Nz = len(fz_axis)
-
-    S3 = np.zeros((Nx, Ny, Nz), dtype=np.float32)
-    W3 = np.zeros((Nx, Ny, Nz), dtype=np.float32)
-
-    fx  = stack.fx.astype(np.float32)
-    dfx = float(np.abs(fx[1] - fx[0]))
-    dfz = float(fz_axis[1] - fz_axis[0])
-    fz0 = float(fz_axis[0])
-
-    for i in range(Nv):
-        th = float(stack.angles[i])
-        c  = np.cos(th)
-        t  = np.tan(th)
-
-        # 1) per-view radial frequency and stable 1/fr weight
-        fr     = np.abs(fx) / max(c, 1e-9)
-        fr_min = dfx / max(c, 1e-9)
-        w_fr   = (1.0 / np.maximum(fr, fr_min)).astype(np.float32)
-
-        # 2) fz location for each fx row, nearest z-bin
-        fz_line = fx * t
-        iz = np.rint((fz_line - fz0) / dfz).astype(int)
-        iz = np.clip(iz, 0, Nz - 1)
-
-        # 3) per-view slice-thickness window
-        Hst = Hst_per_view_1d(fz_axis, detector, th, B=B)   # (Nz,)
-
-        # 4) accumulate rows
-        for ix in range(Nx):
-            h   = Hst[iz[ix]]
-            a_S = w_fr[ix] * h
-            a_W = w_fr[ix] * (h * h)
-            S3[ix, :, iz[ix]] += a_S * stack.S[i, ix, :]
-            W3[ix, :, iz[ix]] += a_W * stack.W[i, ix, :]
-
-    # 5) spoke-density normalization
-    scale = Nv / float(theta_total_rad)
-    S3 *= scale
-    W3 *= scale
-    return S3, W3

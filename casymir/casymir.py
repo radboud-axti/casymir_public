@@ -847,9 +847,3 @@ class SignalStack:
                 self.S[i] = S_filtered
                 self.W[i] = W_filtered
 
-
-
-
-
-
-
