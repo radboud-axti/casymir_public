@@ -30,6 +30,13 @@ from typing import Sequence, Optional
 from casymir import fk_general
 from casymir import tk_general
 
+try:
+    import mucoeff
+    _HAS_MUCOEFF = True
+except ImportError:
+    print("Warning: Could not import mucoeff module.")
+    _HAS_MUCOEFF = False
+
 
 class Detector:
     """
@@ -97,6 +104,7 @@ class Detector:
         self.elems = 2816
         self.add_noise = 0
         self.QE = []
+        self.mu_source = "BOONE"
 
         self.mu = []
         self.components = []
@@ -190,12 +198,27 @@ class Detector:
         """
         mu = np.empty((len(energy), len(self.components)))
         i = 0
-        for component in self.components:
-            mu[:, i] = xrdb.mu_elam(component[0], energy=energy * 1e3, kind='total') \
-                       - xrdb.mu_elam(component[0], energy=energy * 1e3, kind='coh')
-            i += 1
-        weights = [x[1] for x in self.components]
-        mu_comp = np.dot(mu, weights)
+        if self.mu_source == "BOONE":
+            if not _HAS_MUCOEFF:
+                raise ImportError(
+                    "mu_source='BOONE' but 'mucoeff' is not available in this environment."
+                )
+            for component in self.components:
+                Z = xrdb.atomic_number(component[0])
+                # MUCOEFF assumes energies in keV, we directly access mu_en with flag 16.
+                mu[:, i] = mucoeff.mu(16, Z, energy)
+                i += 1
+            weights = [x[1] for x in self.components]
+            mu_comp = np.dot(mu, weights)
+        else:
+            for component in self.components:
+                # XRAYDB assumes energies in eV
+                mu[:, i] = xrdb.mu_elam(component[0], energy=energy * 1e3, kind='total') \
+                           - xrdb.mu_elam(component[0], energy=energy * 1e3, kind='coh')
+                i += 1
+            weights = [x[1] for x in self.components]
+            mu_comp = np.dot(mu, weights)
+
         self.mu = mu_comp
 
     def get_QE(self, energy: np.ndarray) -> np.ndarray:
