@@ -293,6 +293,54 @@ def _wrap_to_band(x: np.ndarray, half_width: float) -> np.ndarray:
     return ((x + half_width) % (2.0 * half_width)) - half_width
 
 
+def _ambr_ramp_kernel_1d(N: int) -> np.ndarray:
+    n = np.fft.fftfreq(N, d=1.0 / N).astype(float)
+
+    n_safe = n.copy()
+    n_safe[0] = 1.0
+
+    h = -1.0 / (np.pi * n_safe) ** 2
+    even_mask = (np.mod(n, 2.0) == 0.0)
+    h[even_mask] = 0.0
+
+    h[0] = 0.25
+    return h
+
+
+def _ambr_ramp_freq_response_centered(N: int) -> np.ndarray:
+    h = _ambr_ramp_kernel_1d(N)
+    H = np.fft.fft(h)
+    Hc = np.fft.fftshift(H)
+    return Hc
+
+
+def apply_ramp_filter_dbt_ambr(
+    sig2d: SignalND,
+    *,
+    detector=None,
+    inplace: bool = False,
+):
+
+    fx = sig2d.fx
+    N_fx = fx.size
+    N_fy = sig2d.fy.size
+
+    Hx = _ambr_ramp_freq_response_centered(N_fx).real
+
+    H2d = Hx[:, None] * np.ones((1, N_fy), dtype=Hx.dtype)
+
+    if inplace:
+        out = sig2d
+    else:
+        out = SignalND(sig2d.axes, sig2d.S.copy(), sig2d.W.copy(), sig2d.mean_quanta)
+        out.mtf  = None if sig2d.mtf  is None else sig2d.mtf.copy()
+        out.nnps = None if sig2d.nnps is None else sig2d.nnps.copy()
+
+    out.deterministic_blur(H2d)
+
+    return out, H2d
+
+
 def ramp_filter_dbt(sig2d: SignalND, *, detector, theta_total_rad: float, theta_i_rad: float) -> np.ndarray:
 
     px = getattr(detector, "px_size_x", getattr(detector, "px_size", None))
@@ -301,7 +349,7 @@ def ramp_filter_dbt(sig2d: SignalND, *, detector, theta_total_rad: float, theta_
     fny = 1.0 / (2.0 * float(px))
 
     c = np.cos(theta_i_rad)
-    fr_ny = fny / c
+    fr_ny = np.abs(fny / c)
 
     FR = _fr_on_plane(sig2d, theta_i_rad)
     FRm = _wrap_to_band(FR, fr_ny)
@@ -342,7 +390,7 @@ def spectrum_apodization_filter(sig2d: SignalND, *, detector, A: float = 1.5, th
     fny = 1.0 / (2.0 * float(px))
 
     c = np.cos(theta_i_rad)
-    fr_ny = fny / c
+    fr_ny = np.abs(fny / c)
 
     FR = _fr_on_plane(sig2d, theta_i_rad)
     if replicate:

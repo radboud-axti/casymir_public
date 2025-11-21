@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 
 from casymir.casymir import SignalND, SignalStack
 
@@ -234,7 +235,7 @@ def map_stack_to_volume(
     # Optional spoke-density normalization
     norm_const = (Nv / Theta_rad) if (Theta_rad > 0 and spoke_density_normalize) else 1.0
 
-    for i in range(Nv):
+    for i in tqdm(range(Nv), desc="DBT recon", unit="view"):
         theta_i = float(angles[i])
         c = np.cos(theta_i)
         s = np.sin(theta_i)
