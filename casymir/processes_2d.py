@@ -492,3 +492,33 @@ def apply_interpolation_filter_bilinear_dbt(
     out.deterministic_blur(H)
     return out, H
 
+
+def model_output_2D(detector: casymir.casymir.Detector, signal: casymir.casymir.SignalND) -> casymir.casymir.SignalND:
+    """
+    Add electronic noise to the Wiener spectrum and compute the model output (MTF and NNPS). 2D version
+
+    :param detector: CASYMIR Detector object containing electronic noise properties.
+    :param signal: CASYMIR Signal object.
+    :return: A new CASYMIR Signal object with electronic noise applied, as well as MTF and NNPS attributes.
+    """
+
+    mtf = signal.signal / signal.signal[0]
+    add_noise = detector.add_noise
+
+    # Apply electronic noise to the Wiener spectrum (NPS) using the entire pixel area
+    wiener2 = signal.wiener[0:int(signal.length / 2)] + ((add_noise ** 2) * (detector.pxa / detector.ff))
+    signal2 = signal.signal[0:int(signal.length / 2)]
+
+    # Frequency vector up to Nyquist frequency
+    f2 = signal.freq[0:int(signal.length / 2)]
+    mtf = mtf[0:int(signal.length / 2)]
+
+    # Normalized NPS (Noise Power Spectrum divided by large area signal)
+    nnps = wiener2 / (signal.signal[0] ** 2)
+
+    output_signal = casymir.casymir.Signal(freq=f2, signal=signal2, wiener=wiener2, mean_quanta=signal.mean_quanta)
+
+    output_signal.mtf = mtf
+    output_signal.nnps = nnps
+
+    return output_signal

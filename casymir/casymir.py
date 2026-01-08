@@ -846,8 +846,23 @@ class SignalStack:
     def __len__(self) -> int:
         return self.Nv
 
-    def view(self, i:int) -> SignalND:
-        sig = SignalND([self.fx, self.fy], self.S[i], self.W[i], float(self.mean_quanta[i]))
+    def view(self, i: int) -> SignalND:
+        sig = SignalND(
+            [self.fx, self.fy],
+            self.S[i],
+            self.W[i],
+            float(self.mean_quanta[i]),
+        )
+
+        # Compute MTF and NNPS on demand
+        ix0 = len(self.fx) // 2
+        iy0 = len(self.fy) // 2
+
+        S0 = np.abs(sig.S[ix0, iy0]) + 1e-12
+
+        sig.mtf = np.abs(sig.S) / S0
+        sig.nnps = sig.W / (S0 ** 2)
+
         return sig
 
     def iter_views(self) -> Iterator[Tuple[int, SignalND]]:
