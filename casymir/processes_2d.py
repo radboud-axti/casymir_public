@@ -1,17 +1,10 @@
-# Module: processes_2d
-
 from typing import Tuple
-import numpy as np
-from scipy import integrate
-
 import casymir.casymir
 import casymir.parallel
 from casymir.casymir import Signal, SignalND, Detector
+import numpy as np
+from scipy import integrate
 
-
-# ============================================================================
-# Shared helpers
-# ============================================================================
 
 def centered_axis_from_nonneg(f_nonneg: np.ndarray) -> np.ndarray:
     f_nonneg = np.asarray(f_nonneg)
@@ -36,13 +29,8 @@ def _lift_1d_to_2d_isotropic_centered(sig, FX: np.ndarray, FY: np.ndarray):
     return S2d, W2d
 
 
-def _bilinear_sample2d(
-    W: np.ndarray,
-    fx: np.ndarray,
-    fy: np.ndarray,
-    FXq: np.ndarray,
-    FYq: np.ndarray,
-) -> np.ndarray:
+def _bilinear_sample2d(W: np.ndarray, fx: np.ndarray, fy: np.ndarray,
+                       FXq: np.ndarray, FYq: np.ndarray) -> np.ndarray:
     Nx, Ny = len(fx), len(fy)
     dfx = fx[1] - fx[0]
     dfy = fy[1] - fy[0]
@@ -56,48 +44,24 @@ def _bilinear_sample2d(
     i1 = i0 + 1
     j1 = j0 + 1
 
-    valid = (i0 >= 0) & (i1 < Nx) & (j0 >= 0) & (j1 < Ny)
+    i0 = np.clip(i0, 0, Nx-1); i1 = np.clip(i1, 0, Nx-1)
+    j0 = np.clip(j0, 0, Ny-1); j1 = np.clip(j1, 0, Ny-1)
 
-    out = np.zeros_like(FXq, dtype=W.dtype)
-    if not np.any(valid):
-        return out
+    tx = X - i0
+    ty = Y - j0
 
-    tx = X[valid] - i0[valid]
-    ty = Y[valid] - j0[valid]
-
-    V00 = W[i0[valid], j0[valid]]
-    V01 = W[i0[valid], j1[valid]]
-    V10 = W[i1[valid], j0[valid]]
-    V11 = W[i1[valid], j1[valid]]
+    V00 = W[i0, j0]; V01 = W[i0, j1]
+    V10 = W[i1, j0]; V11 = W[i1, j1]
 
     V0 = (1 - tx) * V00 + tx * V10
     V1 = (1 - tx) * V01 + tx * V11
-    out[valid] = (1 - ty) * V0 + ty * V1
-    return out
+    return (1 - ty) * V0 + ty * V1
+
 
 
 def _default_harmonic_limits(fmax: float, fs: float) -> int:
     return int(np.ceil(abs(fmax) / abs(fs)))
 
-
-def _copy_signalnd(sig2d: SignalND) -> SignalND:
-    out = SignalND(sig2d.axes, sig2d.S.copy(), sig2d.W.copy(), sig2d.mean_quanta)
-    out.mtf = None if sig2d.mtf is None else sig2d.mtf.copy()
-    out.nnps = None if sig2d.nnps is None else sig2d.nnps.copy()
-    return out
-
-
-def _resolve_detector_pitch_xy(detector) -> tuple[float, float]:
-    px_x = getattr(detector, "px_size_x", getattr(detector, "px_size", None))
-    px_y = getattr(detector, "px_size_y", getattr(detector, "px_size", None))
-    if px_x is None or px_y is None:
-        raise ValueError("Detector must define px_size or both px_size_x / px_size_y.")
-    return float(px_x), float(px_y)
-
-
-# ============================================================================
-# Shared 2D detector / projection-domain stages
-# ============================================================================
 
 def integration_2d(detector, sig) -> Tuple[SignalND, float, np.ndarray]:
     """
@@ -105,18 +69,18 @@ def integration_2d(detector, sig) -> Tuple[SignalND, float, np.ndarray]:
     Convention: x=rows, y=cols.
     """
     fx_c = centered_axis_from_nonneg(sig.freq)
-    fy_c = fx_c.copy()
+    fy_c = fx_c.copy()  # for square detector elements
 
     FX, FY = np.meshgrid(fx_c, fy_c, indexing="ij")
 
     S2d, W2d = _lift_1d_to_2d_isotropic_centered(sig, FX, FY)
 
-    # Current implementation assumes square detector elements through detector.pxa
     a_pd = np.sqrt(detector.pxa)
     Tpx_2d = np.sinc(a_pd * FX) * np.sinc(a_pd * FY)
 
     sig2d = SignalND(axes=[fx_c, fy_c], S=S2d, W=W2d, mean_quanta=sig.mean_quanta)
 
+    # Apply pixel blur and deterministic gain
     sig2d.deterministic_blur(Tpx_2d)
     sig2d.stochastic_gain(detector.pxa, 0.0)
 
@@ -133,22 +97,25 @@ def noise_aliasing_2d(
     2D Dirac-comb aliasing (centered coords, x=rows, y=cols).
     S is unchanged. W becomes the aliased sum of shifted pre-sampling W.
     """
-    assert sig2d_pre.ndim == 2, "noise_aliasing_2d expects a 2D SignalND."
+    assert sig2d_pre.ndim == 2, "noise_aliasing_2d_centered expects a 2D SignalND."
 
     fx, fy = sig2d_pre.fx, sig2d_pre.fy
     FX, FY = sig2d_pre.FX, sig2d_pre.FY
     Wpre = sig2d_pre.W
 
-    px_x, px_y = _resolve_detector_pitch_xy(detector)
-    fsx = 1.0 / px_x
-    fsy = 1.0 / px_y
+    # sampling frequencies
+    px_x = getattr(detector, "px_size_x", getattr(detector, "px_size", None))
+    px_y = getattr(detector, "px_size_y", getattr(detector, "px_size", None))
+    if px_x is None or px_y is None:
+        raise ValueError("Detector must have px_size (or px_size_x/px_size_y).")
+    fsx = 1.0 / float(px_x)
+    fsy = 1.0 / float(px_y)
 
+    # harmonic limits
     fmax_x = max(abs(fx[0]), abs(fx[-1]))
     fmax_y = max(abs(fy[0]), abs(fy[-1]))
-    if Kx is None:
-        Kx = _default_harmonic_limits(fmax_x, fsx)
-    if Ky is None:
-        Ky = _default_harmonic_limits(fmax_y, fsy)
+    if Kx is None: Kx = _default_harmonic_limits(fmax_x, fsx)
+    if Ky is None: Ky = _default_harmonic_limits(fmax_y, fsy)
 
     W_alias = np.zeros_like(Wpre, dtype=float)
 
@@ -159,13 +126,8 @@ def noise_aliasing_2d(
             W_shift = _bilinear_sample2d(Wpre, fx, fy, FXq, FYq)
             W_alias += W_shift
 
-    out = SignalND(
-        axes=[fx, fy],
-        S=sig2d_pre.S.copy(),
-        W=W_alias,
-        mean_quanta=sig2d_pre.mean_quanta,
-    )
-    out.mtf = sig2d_pre.mtf
+    out = SignalND(axes=[fx, fy], S=sig2d_pre.S.copy(), W=W_alias, mean_quanta=sig2d_pre.mean_quanta)
+    out.mtf  = sig2d_pre.mtf
     out.nnps = None
     return out
 
@@ -179,12 +141,9 @@ def focal_spot_blur(
 ):
     """
     Apply 2D focal-spot motion blur as a deterministic blur stage.
-
-    For your current validation setup, this is intended for DBT and typically
-    should be disabled for CBCT.
     """
     if sig2d.ndim != 2:
-        raise ValueError("focal_spot_blur expects a 2D SignalND.")
+        raise ValueError("focal_spot_blur_2d expects a 2D SignalND.")
 
     if angle_rad is not None:
         ux = np.cos(angle_rad)
@@ -202,7 +161,13 @@ def focal_spot_blur(
 
     H_fsb = np.sinc(a1 * f_parallel)
 
-    out = sig2d if inplace else _copy_signalnd(sig2d)
+    if inplace:
+        out = sig2d
+    else:
+        out = SignalND(sig2d.axes, sig2d.S.copy(), sig2d.W.copy(), sig2d.mean_quanta)
+        out.mtf  = None if sig2d.mtf  is None else sig2d.mtf.copy()
+        out.nnps = None if sig2d.nnps is None else sig2d.nnps.copy()
+
     out.deterministic_blur(H_fsb)
 
     return out, H_fsb, a1
@@ -218,13 +183,10 @@ def beam_obliquity_blur_2d(
     inplace: bool = False,
 ):
     """
-    Apply beam-obliquity blur along x (rows).
-
-    For your current validation setup, this is intended for DBT and typically
-    should be disabled for CBCT.
+    Apply beam-obliquity blur along x (rows)
     """
     if sig2d.ndim != 2:
-        raise ValueError("beam_obliquity_blur_2d expects a 2D SignalND.")
+        raise ValueError("beam_obliquity_blur_2d_from_spectrum expects a 2D SignalND.")
 
     d_mm = detector.thickness / 1000
     T_line = _obliquity_T_fx(sig2d.fx, theta_rad, d_mm, spectrum, detector)
@@ -232,24 +194,28 @@ def beam_obliquity_blur_2d(
 
     H_obl = H_line[:, None]
 
-    out = sig2d if inplace else _copy_signalnd(sig2d)
+    if inplace:
+        out = sig2d
+    else:
+        out = SignalND(sig2d.axes, sig2d.S.copy(), sig2d.W.copy(), sig2d.mean_quanta)
+        out.mtf  = None if sig2d.mtf  is None else sig2d.mtf.copy()
+        out.nnps = None if sig2d.nnps is None else sig2d.nnps.copy()
 
-    # Preserve current behavior: signal-only blur
-    out.S = sig2d.S * H_obl
+    signal_2 = sig2d.S * H_obl
+    out.S = signal_2
     return out, H_obl, T_line
-
 
 def _linear_mu_mm_from_detector(detector, E_keV: np.ndarray) -> np.ndarray:
     """
     Returns linear attenuation μ(E) in mm^-1 for the detector's active layer.
     Detector.get_mu(E) populates mass attenuation (cm^2/g) in detector.mu.
-    Linear μ = (μ_mass * density * packing_factor) [cm^-1] -> mm^-1.
+    Linear μ = (μ_mass * density * packing_factor) [cm^-1] -> convert to mm^-1.
     """
     detector.get_mu(E_keV)
-    rho = float(detector.material["density"])
-    pf = float(detector.material.get("pf", 1.0))
-    mu_linear_cm = detector.mu * rho * pf
-    mu_linear_mm = mu_linear_cm / 10.0
+    rho = float(detector.material["density"])      # g/cm^3
+    pf  = float(detector.material.get("pf", 1.0))  # packing factor (dimensionless)
+    mu_linear_cm = detector.mu * rho * pf          # cm^-1
+    mu_linear_mm = mu_linear_cm / 10.0             # mm^-1
     return mu_linear_mm
 
 
@@ -258,29 +224,30 @@ def _obliquity_T_fx(
     theta_rad: float,
     d_mm: float,
     spectrum,
-    detector,
+    detector
 ) -> np.ndarray:
     """
     Compute T_theta(fx) using spectrum.energy / spectrum.fluence and detector μ(E).
     """
-    E = np.asarray(spectrum.energy, dtype=float)
-    Phi = np.asarray(spectrum.fluence, dtype=float)
-    mu = _linear_mu_mm_from_detector(detector, E)
+    E  = np.asarray(spectrum.energy,  dtype=float)          # keV
+    Phi= np.asarray(spectrum.fluence, dtype=float)          # (photons / cm^2 / keV)
+    mu = _linear_mu_mm_from_detector(detector, E)           # mm^-1
 
+    # broadcast to (Ne, Nfx)
     MU = mu[:, None]
     FX = fx_c[None, :]
 
     tprime = d_mm / np.cos(theta_rad)
-    alpha = 2.0 * np.pi * FX * tprime * np.tan(theta_rad)
-    beta = 2.0 * np.pi * FX * np.sin(theta_rad) / MU
+    alpha  = 2.0 * np.pi * FX * tprime * np.tan(theta_rad)
+    beta   = 2.0 * np.pi * FX * np.sin(theta_rad) / MU
 
     Ew = (E * Phi)[:, None]
 
     numerator = (1.0 - np.exp(-MU * tprime - 1j * alpha)) / (1.0 + 1j * beta)
-    num_int = integrate.trapezoid(Ew * numerator, E, axis=0)
+    num_int   = integrate.trapezoid(Ew * numerator, E, axis=0)
 
-    denom = (1.0 - np.exp(-MU * tprime))
-    den_int = integrate.trapezoid(Ew * denom, E, axis=0)
+    denom     = (1.0 - np.exp(-MU * tprime))
+    den_int   = integrate.trapezoid(Ew * denom, E, axis=0)
 
     T_fx = num_int / den_int
     return T_fx
@@ -291,25 +258,23 @@ def log_transform_2d(
     *,
     spectrum,
     a: float,
-    b: float,
+    b: float
 ):
     k_air = spectrum.dak
-    gain_factor = a + b * k_air
+    gain_factor = a + b*k_air
 
-    sig2d.S = sig2d.S / gain_factor
-    sig2d.W = sig2d.W / (gain_factor ** 2)
+    signal_2 = sig2d.S / gain_factor
+    wiener_2 = sig2d.W / (gain_factor ** 2)
+
+    sig2d.S = signal_2
+    sig2d.W = wiener_2
 
     return sig2d, gain_factor
 
 
-# ============================================================================
-# DBT-specific helpers
-# ============================================================================
-
-def _dbt_fr_on_plane(sig2d: SignalND, theta_i_rad: float) -> np.ndarray:
+def _fr_on_plane(sig2d: SignalND, theta_i_rad: float) -> np.ndarray:
     """
-    DBT per-view radial frequency in the rotation plane:
-        f_r = f_x / cos(theta_i)
+    DBT per-view radial frequency in the rotation plane: f_r = f_x / cos(theta_i).
     """
     FX = sig2d.FX
     c = np.cos(theta_i_rad)
@@ -324,6 +289,7 @@ def _wrap_to_band(x: np.ndarray, half_width: float) -> np.ndarray:
     """
     if half_width <= 0:
         raise ValueError("half_width must be > 0")
+    # map to (-half_width, half_width]
     return ((x + half_width) % (2.0 * half_width)) - half_width
 
 
@@ -348,27 +314,44 @@ def _ambr_ramp_freq_response_centered(N: int) -> np.ndarray:
     return Hc
 
 
-# ============================================================================
-# Reconstruction filters: DBT
-# ============================================================================
-
-def ramp_filter_dbt(
+def apply_ramp_filter_dbt_ambr(
     sig2d: SignalND,
     *,
-    detector,
-    theta_total_rad: float,
-    theta_i_rad: float,
-) -> np.ndarray:
-    """
-    DBT ramp filter in radial frequency coordinates.
-    """
-    px_x, _ = _resolve_detector_pitch_xy(detector)
-    fny = 1.0 / (2.0 * px_x)
+    detector=None,
+    inplace: bool = False,
+):
+
+    fx = sig2d.fx
+    N_fx = fx.size
+    N_fy = sig2d.fy.size
+
+    Hx = _ambr_ramp_freq_response_centered(N_fx).real
+
+    H2d = Hx[:, None] * np.ones((1, N_fy), dtype=Hx.dtype)
+
+    if inplace:
+        out = sig2d
+    else:
+        out = SignalND(sig2d.axes, sig2d.S.copy(), sig2d.W.copy(), sig2d.mean_quanta)
+        out.mtf  = None if sig2d.mtf  is None else sig2d.mtf.copy()
+        out.nnps = None if sig2d.nnps is None else sig2d.nnps.copy()
+
+    out.deterministic_blur(H2d)
+
+    return out, H2d
+
+
+def ramp_filter_dbt(sig2d: SignalND, *, detector, theta_total_rad: float, theta_i_rad: float) -> np.ndarray:
+
+    px = getattr(detector, "px_size_x", getattr(detector, "px_size", None))
+    if px is None:
+        raise ValueError("Detector must define px_size (or px_size_x).")
+    fny = 1.0 / (2.0 * float(px))
 
     c = np.cos(theta_i_rad)
     fr_ny = np.abs(fny / c)
 
-    FR = _dbt_fr_on_plane(sig2d, theta_i_rad)
+    FR = _fr_on_plane(sig2d, theta_i_rad)
     FRm = _wrap_to_band(FR, fr_ny)
 
     scale = 2.0 * np.tan(theta_total_rad) / fr_ny
@@ -376,24 +359,40 @@ def ramp_filter_dbt(
     return H
 
 
-def apodization_filter_dbt(
+def apply_ramp_filter_dbt(
     sig2d: SignalND,
     *,
     detector,
-    A: float = 1.5,
-    theta_i_rad: float = 0.0,
-    replicate: bool = True,
-) -> np.ndarray:
+    theta_total_rad: float,
+    theta_i_rad: float,
+    inplace: bool = False,
+):
     """
-    DBT spectral apodization filter in radial frequency coordinates.
+    Build H_RA(fr) and apply as deterministic blur.
     """
-    px_x, _ = _resolve_detector_pitch_xy(detector)
-    fny = 1.0 / (2.0 * px_x)
+    H = ramp_filter_dbt(sig2d, detector=detector, theta_total_rad=theta_total_rad, theta_i_rad=theta_i_rad)
+
+    if not inplace:
+        out = SignalND(sig2d.axes, sig2d.S.copy(), sig2d.W.copy(), sig2d.mean_quanta)
+        out.mtf  = None if sig2d.mtf  is None else sig2d.mtf.copy()
+        out.nnps = None if sig2d.nnps is None else sig2d.nnps.copy()
+    else:
+        out = sig2d
+
+    out.deterministic_blur(H)
+    return out, H
+
+
+def spectrum_apodization_filter(sig2d: SignalND, *, detector, A: float = 1.5, theta_i_rad: float = 0.0, replicate: bool = True) -> np.ndarray:
+    px = getattr(detector, "px_size_x", getattr(detector, "px_size", None))
+    if px is None:
+        raise ValueError("Detector must define px_size or px_size_x.")
+    fny = 1.0 / (2.0 * float(px))
 
     c = np.cos(theta_i_rad)
     fr_ny = np.abs(fny / c)
 
-    FR = _dbt_fr_on_plane(sig2d, theta_i_rad)
+    FR = _fr_on_plane(sig2d, theta_i_rad)
     if replicate:
         FR = _wrap_to_band(FR, fr_ny)
 
@@ -404,7 +403,31 @@ def apodization_filter_dbt(
     return H
 
 
-def interpolation_filter_dbt(
+def apply_sa_filter_dbt(
+    sig2d: SignalND,
+    *,
+    detector,
+    A: float = 1.5,
+    theta_i_rad: float,
+    inplace: bool = False,
+):
+    """
+    Build H_SA(fr) and apply as deterministic blur.
+    """
+    H = spectrum_apodization_filter(sig2d, detector=detector, theta_i_rad=theta_i_rad, A=A)
+
+    if not inplace:
+        out = SignalND(sig2d.axes, sig2d.S.copy(), sig2d.W.copy(), sig2d.mean_quanta)
+        out.mtf  = None if sig2d.mtf  is None else sig2d.mtf.copy()
+        out.nnps = None if sig2d.nnps is None else sig2d.nnps.copy()
+    else:
+        out = sig2d
+
+    out.deterministic_blur(H)
+    return out, H
+
+
+def interpolation_filter_bilinear(
     sig2d: SignalND,
     *,
     a_x: float | None = None,
@@ -412,13 +435,11 @@ def interpolation_filter_dbt(
     m_x: float | None = None,
     m_y: float | None = None,
     theta_i_rad: float = 0.0,
-    power: int = 2,
+    power: int = 2
 ) -> np.ndarray:
-    """
-    DBT bilinear interpolation filter using (f_r, f_y).
-    """
-    FY = sig2d.FY
-    FR = _dbt_fr_on_plane(sig2d, theta_i_rad)
+
+    FX, FY = sig2d.FX, sig2d.FY
+    FR = _fr_on_plane(sig2d, theta_i_rad)
 
     if (a_x is not None) and (a_y is not None):
         s_r = float(a_x)
@@ -435,182 +456,7 @@ def interpolation_filter_dbt(
     return H
 
 
-# ============================================================================
-# Reconstruction filters: CBCT
-# ============================================================================
-
-def ramp_filter_cbct(sig2d: SignalND, eps: float = 1e-12) -> np.ndarray:
-    """
-    CBCT ramp filter in detector coordinates.
-    Assumes sig2d.FX corresponds to detector-u frequency.
-    """
-    H = np.abs(sig2d.FX)
-    if eps > 0.0:
-        H = np.maximum(H, eps)
-    return H
-
-
-def apodization_filter_cbct(
-    sig2d: SignalND,
-    *,
-    detector=None,
-    a_u: float | None = None,
-    B_u: float = 1.0,
-    hwin: float = 0.0,
-) -> np.ndarray:
-    """
-    CBCT apodization filter in detector-u frequency.
-
-    First-pass implementation:
-        H = hwin + (1-hwin) * cos(2*pi*f_u*a_u*B_u)
-    inside the supported detector-u band, zero outside.
-
-    Notes
-    -----
-    - No DBT radial-frequency mapping.
-    - No theta_i dependence.
-    - Assumes sig2d.FX is detector-u frequency.
-    """
-    if a_u is None:
-        if detector is None:
-            raise ValueError("Provide either detector or a_u.")
-        a_u, _ = _resolve_detector_pitch_xy(detector)
-
-    FU = sig2d.FX
-    f_u_lim = 1.0 / (2.0 * float(a_u) * float(B_u))
-
-    H = np.zeros_like(FU, dtype=np.float32)
-    inside = np.abs(FU) <= f_u_lim
-    H[inside] = hwin + (1.0 - hwin) * np.cos(2.0 * np.pi * FU[inside] * a_u * B_u)
-    return H
-
-
-def interpolation_filter_cbct(
-    sig2d: SignalND,
-    *,
-    detector=None,
-    a_u: float | None = None,
-    a_v: float | None = None,
-    power: int = 2,
-) -> np.ndarray:
-    """
-    CBCT bilinear interpolation filter in detector coordinates (f_u, f_v).
-    """
-    if (a_u is None) or (a_v is None):
-        if detector is None:
-            raise ValueError("Provide either detector or both a_u / a_v.")
-        a_u, a_v = _resolve_detector_pitch_xy(detector)
-
-    FU, FV = sig2d.FX, sig2d.FY
-
-    Hu = np.sinc(float(a_u) * FU)
-    Hv = np.sinc(float(a_v) * FV)
-
-    H = (Hu * Hu) * (Hv * Hv) if power == 2 else (Hu * Hv)
-    return H
-
-
-# ============================================================================
-# Apply wrappers
-# ============================================================================
-
-def apply_ramp_filter_dbt_ambr(
-    sig2d: SignalND,
-    *,
-    detector=None,
-    inplace: bool = False,
-):
-    fx = sig2d.fx
-    N_fx = fx.size
-    N_fy = sig2d.fy.size
-
-    Hx = _ambr_ramp_freq_response_centered(N_fx).real
-    H2d = Hx[:, None] * np.ones((1, N_fy), dtype=Hx.dtype)
-
-    out = sig2d if inplace else _copy_signalnd(sig2d)
-    out.deterministic_blur(H2d)
-
-    return out, H2d
-
-
-def apply_ramp_filter_dbt(
-    sig2d: SignalND,
-    *,
-    detector,
-    theta_total_rad: float,
-    theta_i_rad: float,
-    inplace: bool = False,
-):
-    H = ramp_filter_dbt(
-        sig2d,
-        detector=detector,
-        theta_total_rad=theta_total_rad,
-        theta_i_rad=theta_i_rad,
-    )
-
-    out = sig2d if inplace else _copy_signalnd(sig2d)
-    out.deterministic_blur(H)
-    return out, H
-
-
-def apply_ramp_filter_cbct(
-    sig2d: SignalND,
-    *,
-    eps: float = 0.0,
-    inplace: bool = False,
-):
-    H = ramp_filter_cbct(sig2d, eps=eps)
-
-    out = sig2d if inplace else _copy_signalnd(sig2d)
-    out.deterministic_blur(H)
-    return out, H
-
-
-def apply_apodization_filter_dbt(
-    sig2d: SignalND,
-    *,
-    detector,
-    A: float = 1.5,
-    theta_i_rad: float,
-    replicate: bool = True,
-    inplace: bool = False,
-):
-    H = apodization_filter_dbt(
-        sig2d,
-        detector=detector,
-        A=A,
-        theta_i_rad=theta_i_rad,
-        replicate=replicate,
-    )
-
-    out = sig2d if inplace else _copy_signalnd(sig2d)
-    out.deterministic_blur(H)
-    return out, H
-
-
-def apply_apodization_filter_cbct(
-    sig2d: SignalND,
-    *,
-    detector=None,
-    a_u: float | None = None,
-    B_u: float = 1.0,
-    hwin: float = 0.5,
-    inplace: bool = False,
-):
-    H = apodization_filter_cbct(
-        sig2d,
-        detector=detector,
-        a_u=a_u,
-        B_u=B_u,
-        hwin=hwin,
-    )
-
-    out = sig2d if inplace else _copy_signalnd(sig2d)
-    out.deterministic_blur(H)
-    return out, H
-
-
-def apply_interpolation_filter_dbt(
+def apply_interpolation_filter_bilinear_dbt(
     sig2d: SignalND,
     detector,
     *,
@@ -619,88 +465,58 @@ def apply_interpolation_filter_dbt(
     m_x: float | None = None,
     m_y: float | None = None,
     theta_i_rad: float = 0.0,
+    use_radial: bool = True,
     power: int = 2,
     inplace: bool = False,
 ):
-    if a_x is None or a_y is None:
-        a_x, a_y = _resolve_detector_pitch_xy(detector)
-
-    H = interpolation_filter_dbt(
+    """
+    Build H_IN and apply as a deterministic blur stage.
+    """
+    a_x = detector.px_size
+    a_y = detector.px_size
+    H = interpolation_filter_bilinear(
         sig2d,
-        a_x=a_x,
-        a_y=a_y,
-        m_x=m_x,
-        m_y=m_y,
+        a_x=a_x, a_y=a_y,
+        m_x=m_x, m_y=m_y,
         theta_i_rad=theta_i_rad,
-        power=power,
+        power=power
     )
 
-    out = sig2d if inplace else _copy_signalnd(sig2d)
+    if not inplace:
+        out = SignalND(sig2d.axes, sig2d.S.copy(), sig2d.W.copy(), sig2d.mean_quanta)
+        out.mtf  = None if sig2d.mtf  is None else sig2d.mtf.copy()
+        out.nnps = None if sig2d.nnps is None else sig2d.nnps.copy()
+    else:
+        out = sig2d
+
     out.deterministic_blur(H)
     return out, H
 
 
-def apply_interpolation_filter_cbct(
-    sig2d: SignalND,
-    detector=None,
-    *,
-    a_u: float | None = None,
-    a_v: float | None = None,
-    power: int = 2,
-    inplace: bool = False,
-):
-    H = interpolation_filter_cbct(
-        sig2d,
-        detector=detector,
-        a_u=a_u,
-        a_v=a_v,
-        power=power,
-    )
-
-    out = sig2d if inplace else _copy_signalnd(sig2d)
-    out.deterministic_blur(H)
-    return out, H
-
-
-# ============================================================================
-# Backward-compatible aliases
-# ============================================================================
-
-# Keep old names alive for now so the rest of the codebase doesn't explode.
-spectrum_apodization_filter = apodization_filter_dbt
-apply_sa_filter_dbt = apply_apodization_filter_dbt
-interpolation_filter_bilinear = interpolation_filter_dbt
-apply_interpolation_filter_bilinear_dbt = apply_interpolation_filter_dbt
-
-
-# ============================================================================
-# Legacy 1D-style output helper
-# ============================================================================
-
-def model_output_2D(
-    detector: casymir.casymir.Detector,
-    signal: casymir.casymir.SignalND,
-) -> casymir.casymir.SignalND:
+def model_output_2D(detector: casymir.casymir.Detector, signal: casymir.casymir.SignalND) -> casymir.casymir.SignalND:
     """
-    Legacy 1D-style output helper retained as-is.
+    Add electronic noise to the Wiener spectrum and compute the model output (MTF and NNPS). 2D version
+
+    :param detector: CASYMIR Detector object containing electronic noise properties.
+    :param signal: CASYMIR Signal object.
+    :return: A new CASYMIR Signal object with electronic noise applied, as well as MTF and NNPS attributes.
     """
+
     mtf = signal.signal / signal.signal[0]
     add_noise = detector.add_noise
 
+    # Apply electronic noise to the Wiener spectrum (NPS) using the entire pixel area
     wiener2 = signal.wiener[0:int(signal.length / 2)] + ((add_noise ** 2) * (detector.pxa / detector.ff))
     signal2 = signal.signal[0:int(signal.length / 2)]
 
+    # Frequency vector up to Nyquist frequency
     f2 = signal.freq[0:int(signal.length / 2)]
     mtf = mtf[0:int(signal.length / 2)]
 
+    # Normalized NPS (Noise Power Spectrum divided by large area signal)
     nnps = wiener2 / (signal.signal[0] ** 2)
 
-    output_signal = casymir.casymir.Signal(
-        freq=f2,
-        signal=signal2,
-        wiener=wiener2,
-        mean_quanta=signal.mean_quanta,
-    )
+    output_signal = casymir.casymir.Signal(freq=f2, signal=signal2, wiener=wiener2, mean_quanta=signal.mean_quanta)
 
     output_signal.mtf = mtf
     output_signal.nnps = nnps
