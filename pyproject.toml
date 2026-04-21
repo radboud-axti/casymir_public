@@ -17,6 +17,8 @@ dependencies = [
     "tqdm (>=4.67.1,<5.0.0)",
 ]
 
+[tool.poetry.dependencies]
+mucoeff = { git = "git@github.com:radboud-axti/mucoeff_python.git", branch = "main" }
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
