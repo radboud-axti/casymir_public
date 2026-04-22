@@ -5,7 +5,7 @@ casymir.fitting
 1D fitting utilities for 2D CASYMIR SignalND objects.
 
 - Extracts profiles along the 2D frequency domaion axes (u,v)
-- Fits a double lorentzian to the MTF profiles and a double Gaussian to the NPS profiles.
+- Fits a Lorentzian or Gaussian to the MTF profiles and a double Gaussian to the NPS profiles.
 """
 
 from __future__ import annotations
@@ -44,9 +44,15 @@ def lorentzian_mtf(x, a, b, c):
     return a / (1 + (x / b) ** 2) + (1 - a) / (1 + (x / c) ** 2)
 
 
+def gaussian_mtf(x, a, b, c):
+    """Double Gaussian MTF model."""
+    return a * np.exp(-(x / b) ** 2) + (1 - a) * np.exp(-(x / c) ** 2)
+
+
 def gaussian_nnps(x, a, b, c, d):
     """Double Gaussian NNPS model."""
     return a * np.exp(-(x / b) ** 2) + c * np.exp(-(x / d) ** 2)
+
 
 def mask_freq(
     x: np.ndarray,
@@ -58,7 +64,6 @@ def mask_freq(
     """
     mask = (x >= 0) & (x <= f_ny)
     return x[mask], y[mask]
-
 
 
 def _safe_curve_fit(
@@ -119,6 +124,7 @@ def normalize_mtf(y: np.ndarray) -> np.ndarray:
 def fit_nd(
     signal_nd,
     direction: Direction = "u",
+    type_mtf: str = "lorentzian",
 ) -> FitResultND:
     if signal_nd.mtf is None or signal_nd.nnps is None:
         raise ValueError("SignalND.mtf and SignalND.nnps must be defined.")
@@ -154,15 +160,21 @@ def fit_nd(
         max(2 * np.median(x_nps), 1e-6),
     ]
 
-    popt_mtf, pcov_mtf = _safe_curve_fit(lorentzian_mtf, x_mtf, y_mtf_n, p0_mtf)
-    popt_nps, pcov_nps = _safe_curve_fit(gaussian_nnps, x_nps, y_nps, p0_nps)
+    if type_mtf == "lorentzian":
+        func_mtf = lorentzian_mtf
+    elif type_mtf == "gaussian":
+        func_mtf = gaussian_mtf
+    else:
+        raise ValueError("Unsupported MTF fit type: {}".format(type_mtf))
 
-    yfit_mtf = lorentzian_mtf(x_mtf, *popt_mtf) if popt_mtf is not None else None
+    popt_mtf, pcov_mtf = _safe_curve_fit(func_mtf, x_mtf, y_mtf_n, p0_mtf)
+    popt_nps, pcov_nps = _safe_curve_fit(gaussian_nnps, x_nps, y_nps, p0_nps)
+    yfit_mtf = func_mtf(x_mtf, *popt_mtf) if popt_mtf is not None else None
     yfit_nps = gaussian_nnps(x_nps, *popt_nps) if popt_nps is not None else None
 
     mtf_res = FitResult1D(
         kind="MTF",
-        model="lorentzian",
+        model=type_mtf,
         direction=direction,
         params=popt_mtf,
         cov=pcov_mtf,
@@ -187,8 +199,12 @@ def fit_nd(
     return FitResultND(mtf=mtf_res, nnps=nnps_res)
 
 
-def fit_stack(stack, direction: Direction = "u") -> list[FitResultND]:
+def fit_stack(
+    stack,
+    direction: Direction = "u",
+    type_mtf: str = "lorentzian",
+) -> list[FitResultND]:
     """
     Fit all views in a SignalStack.
     """
-    return [fit_nd(sig, direction=direction) for _, sig in stack.iter_views()]
+    return [fit_nd(sig, direction=direction, type_mtf=type_mtf) for _, sig in stack.iter_views()]
