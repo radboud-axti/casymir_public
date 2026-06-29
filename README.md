@@ -3,6 +3,7 @@
 ## IMPORTANT NOTICE
 This repository is currently in transition from CASYMIR v1 to CASYMIR v2.
 The poster presented at IWBI 2026 describes the upcoming v2 implementation. The public v2 code, examples, and documentation are being prepared for release and will be added here after final cleanup and validation.
+
 Expected public release: August 2026.
 
 For the previously reported v1 implementation (projection domain model), see legacy-v1/.
