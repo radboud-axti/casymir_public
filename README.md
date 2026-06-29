@@ -1,76 +1,93 @@
 # CASYMIR
 
-## Introduction
+## IMPORTANT NOTICE
+This repository is currently in transition from CASYMIR v1 to CASYMIR v2.
+The poster presented at IWBI 2026 describes the upcoming v2 implementation. The public v2 code, examples, and documentation are being prepared for release and will be added here after final cleanup and validation.
+Expected public release: August 2026.
 
-CASYMIR is a generalized cascaded linear model to describe the spatial resolution and noise propagation characteristics of x-ray detectors. It employs linear systems theory to model the different gain and blurring stages within the detector. The key feature of CASYMIR is its flexibility in terms of detector designs and system geometries.
-Technical details of the implementation can be found in [references].
+For the previously reported v1 implementation (projection domain model), see legacy-v1/.
 
-## Requirements
+CASYMIR is a generalized cascaded linear systems model for x-ray detector
+resolution and noise propagation. It models the detector as a sequence of gain,
+blur, sampling, and noise processes, and can now carry those signals from the
+original 1D detector chain into 2D projection-domain and 3D reconstruction-domain
+frequency models.
 
-CASYMIR has the following dependencies:
+The implementation is described in:
+
+Pacheco G, Pautasso JJ, Michielsen K, Sechopoulos I. Software Article: A
+generalized cascaded linear system model implementation for x-ray detectors.
+Medical Physics. 2025;52:e18079. https://doi.org/10.1002/mp.18079
+
+## Installation
+
+CASYMIR requires Python 3.10 or newer. Install it from the repository root with:
+
+```bash
+python -m pip install -e .
+```
+
+The core dependencies are:
+
 - numpy
 - scipy
 - spekpy
-- xraydb
-- pyYAML
+- pyyaml
+- tqdm
+- mucoeff==1.0.0
 
-All dependencies can be installed from the PyPI repository.
+`mucoeff` is the default attenuation-coefficient source. `xraydb` is no longer a
+required dependency; install the optional extra only if you need the legacy
+`mu_source="XRAYDB"` comparison path.
 
-
-### 1. CASYMIR installation
-
-Navigate to the CASYMIR root directory and install it along with its dependencies:
-
-```
-cd path/to/casymir
-python -m pip install -e
+```bash
+python -m pip install -e ".[xraydb]"
 ```
 
-This command installs CASYMIR in editable mode and automatically installs dependencies specified in the “setup.py” file.
+## Public System Examples
 
-## 2. Running CASYMIR (standalone)
-CASYMIR can be executed in standalone mode using the following command:
+CASYMIR V2 provides four example systems:
 
-```
-python run_casymir.py <system_file.yaml> <spectrum_name> <kV> <mAs> [options]
-```
+- `example_bct.yaml`: original breast CT example based on a Koning bCT system.
+- `example_dbt.yaml`: original DBT example based on the Siemens Mammomat
+  Revelation.
+- `example_cbct.yaml`: benchtop CBCT example.
+- `example_novation_prototype.yaml`: Novation prototype DBT example.
 
-### Required inputs:
+The YAML files describe source and detector hardware. Acquisition choices such
+as view count, angular span, reconstruction filter settings, and voxel sampling
+are set in the calling script or API workflow.
 
-- `<system_file.yaml>`:	Path to the YAML file containing the system description (see sect. 3)
-- `<spectrum_name>`:	Name of the spectrum
-- `<kV>`:	kV of the x-ray tube
-- `<mAs>`:	Current-time product of the x-ray tube
+## Examples
 
-### Optional inputs:
+Example scripts live in `examples/` and can be run from the repository root:
 
-- `--output_file, -of <output_file.csv>`:	Path to CSV to store the output of CASYMIR (standalone). The default is “output.csv”.
-- `--print_fit, -pf <Y|N>`:	Print fit parameters for MTF and NNPS curves. The default functions are:
-  
-  $$MTF(f)=\frac{a}{(1+(f/b)^2)}+\frac{(1-a)}{(1+(f/c)^2)}$$,
-  
-  $$NPS(f)=a e^{-(f/b)^2}+c e^{-(f/d)^2}$$.
-
-When executed in standalone mode, CASYMIR creates an CSV file containing frequency vector (up until the detector’s Nyquist frequency), the MTF, and the NNPS. The following command saves the results corresponding to the provided DBT system example for a representative mammography/DBT spectrum. 
-
-```
-python run_casymir.py example_dbt.yaml ex_spectrum 28 50 -of example_dbt.csv -pf Y
+```bash
+python -m examples.cbct
+python -m examples.novation_prototype
+python -m examples.bct
+python -m examples.dbt
 ```
 
-## 3. System files
-Input to CASYMIR (standalone) is via YAML system files, which define all parameters of the x-ray source and detector.  The first two key-value pairs are used to store the system’s name and description, and these are followed by dictionaries containing the detector and source parameters.
+The examples do not require plotting libraries. They save compressed `.npz`
+outputs in `examples/outputs/` by default. Each example saves 3D
+reconstruction-domain arrays, including the signal transfer, Wiener spectrum,
+MTF, NNPS, frequency axes, projection angles, and run metadata.
 
-## 3.1 An example
-An example is given below. This system file corresponds to a Koning breast CT (bCT) system.
-```
+## System YAML Format
+
+Each system file contains a short identifier, a description, a detector block,
+and a source block:
+
+```yaml
 system_id: example bct
-description: Test bCT system
+description: Example bCT system based on a Koning bCT
 
 detector:
   type: indirect
   active_layer: CsI
   px_size: 0.1518
-  ff: 0.83
+  ff: 0.85
   thickness: 700
   trapping_depth: 0
   elems: 256
@@ -84,100 +101,80 @@ source:
   filter: [(Be, 1.4), (Al, 1.514)]
   external_filter: [(Al, 10), (Air, 950)]
 ```
-Explanations of each of the detector and source parameters are given in the following subsections
 
-## 3.1.1 Detector dictionary
-The detector dictionary contains the following key-value pairs:
-- `type`: detector type (direct or indirect). This defines the default gain and blurring stages.
-- `active_layer`: material of the detector’s conversion layer. The name (value) will be used to reference a material YAML file (see section 4).
-- `px_size`: pixel pitch in millimeters.
-- `ff`: pixel fill factor. Value goes from 0 to 1.
-- `thickness`: active layer thickness in micrometers.
-- `trapping_depth`: (only for direct conversion detectors) distance (in micrometers) between the collection layer and pixel electrodes.
-- `elems`: number of detector elements.
-- `add_noise`: additive electronic noise, expressed in charge quanta per area.
-- `extra_materials`: detector cover materials. The value of this key is a list with the following format, with all thicknesses expressed in millimeters:
-[(Material1, thickness1), (Material2, thickness2), … , (MaterialN, thicknessN)]
+Detector fields:
 
-The available material list can be accessed via SpekPy’s  show_matls() function. In the event that materials not included in SpekPy are needed, these can be manually added to the mat_dictionary dictionary within the Spectrum class definition.
+- `type`: `direct` or `indirect`.
+- `active_layer`: detector material YAML name in `casymir/data/detectors`.
+- `px_size`: detector pixel pitch in mm.
+- `ff`: pixel fill factor.
+- `thickness`: active-layer thickness in micrometers.
+- `trapping_depth`: direct-conversion charge collection depth in micrometers.
+- `elems`: number of frequency samples.
+- `add_noise`: additive electronic noise.
+- `extra_materials`: detector cover materials as material/thickness pairs.
 
-## 3.1.2 Source dictionary
-This dictionary contains all the parameters of the x-ray source used by the model, namely:
-- `target_angle`: target (anode) angle in degrees.
-- `target`: target material. Supported materials are W (tungsten), Mo (molybdenum) or Rh (rhodium).
-- `SID`: source to image distance in centimeters.
-- `filter`: internal tube filtration, including the x-ray tube window. Follows the same format as the extra_materials list.
-- `external_filter`: external filtration. Every material in between the x-ray tube and the detector should be listed here, for instance aluminum or PMMA to simulate breast attenuation. Follows the same format as the extra_materials list.
+Source fields:
 
+- `target_angle`: anode angle in degrees.
+- `target`: target material, usually `W`, `Mo`, or `Rh`.
+- `SID`: source-to-image distance in cm.
+- `filter`: internal tube filtration.
+- `external_filter`: filtration between tube and detector.
 
-## 4. Data files
+## 2D and 3D Model Blocks
 
-### 4.1 Detectors 
+The 3D model follows the same block style as the original detector cascade:
 
-Detector material files are located in the “data/detectors” folder. These files define the characteristics of commonly used active layer materials, such as amorphous selenium (aSe) for direct conversion detectors and cesium iodide (CsI) for scintillator detectors.
-The parallel cascaded model implementation uses the following information about the detector materials:
+1. Run the 1D detector stages.
+2. Lift the result to a 2D detector plane with `pixel_integration_2d`.
+3. Apply 2D sampling, log normalization, and reconstruction filters.
+4. Collect projection views in a `SignalStack`.
+5. Map the stack into a 3D frequency volume.
+6. Apply voxel sampling or diagnostic aliasing blocks when needed.
 
-- `Components`: elemental composition, expressed in fractional weights.
--	`density`: physical density, expressed in g/cm3
--	`omega`: k-fluorescent yield.
--	`xi`: probability of a k-shell photoelectric interaction.
--	`ek`: K-edge of the material, in keV.
--	`kenergy`: average energy of k-emissions, in keV.
--	`w`: energy required to create an electron-hole pair, in keV. Exclusive to semiconductors.
--	`m0`: optical photons produced per keV of deposited energy. Exclusive to scintillators.
--	`ce`: coupling efficiency. Exclusive to scintillators.
--	`pf`: packing fraction of the material.
--	`mu_mass_abs`: photoelectric mass attenuation coefficient of the material at kenergy, in cm2/g.
--	`mu_mass_tot`: total mass attenuation coefficient of the material at kenergy, in cm2/g.
--	`spread_type`: type of function describing the spread of the quanta after the parallel paths. For scintillator detectors, the “Optical” tag is used; for semiconductors, “Charge redistribution”.
--	`spread_coeff`: value of H in the function T(f)=1⁄(1+Hf^2+H^2 f^3), which describes the spread of optical quanta in scintillator detectors.
+For CBCT cases where each view uses the same projection-domain signal,
+`projection_stack_from_signal(signal_2d, angles_rad)` builds the stack directly.
+For DBT, build the stack view by view when focal spot blur, beam obliquity, or
+other angle-dependent terms are active.
 
-Example YAML file for CsI:
+Reconstructed 3D volumes use the CASYMIR convention:
 
-```
-Components:
-  1: Cs, 0.51155
-  2: I, 0.48845
+- `x`: detector-u / transverse scan direction.
+- `y`: reconstructed depth / rotation direction.
+- `z`: detector-v / longitudinal direction.
 
-density: 4.51
-omega: 0.87
-xi: 0.85
-ek: 35
-kenergy: 30
-pf: 0.72
-ce: 0.59
-m0: 55.6
+### DBT Fourier Mapping
 
-mu_mass_abs: 7.907025736
-mu_mass_tot: 8.733446589
+`map_dbt_stack_to_volume` supports two deposition modes:
 
-spread_type: "Optical"
-spread_coeff: 0.15
+```python
+volume = map_dbt_stack_to_volume(stack, f_depth, splat=False)
 ```
 
-### 4.2 Materials
+`splat=False` performs pure nearest-bin deposition for each view. This is useful
+when inspecting the discrete Fourier mapping directly.
 
-User-defined materials are stored in the “data/materials” folder. These YAML files contain the necessary information to create SpekPy materials to be used for filtering. Materials can be defined in two ways: by chemical formula, or by fractional weights.
-Each YAML file should only contain one material definition, enclosed in a `material` block. Examples for each material definition are given below:
-
-```
-material:
-  - name: Mg-HA
-    density: 2.8
-    formula: Mg10P6O24O2H2
-    comment: Magnesium-substituted Hydroxyapatite, defined by chemical formula
-```
-
-```
-material:
-  - name: Type I MC
-    density: 2.2
-    composition:
-      20: 0.244188
-      6: 0.146358
-      8: 0.584889
-      1: 0.024565
-    comment: Type I breast microcalcification (Calcium Oxalate), defined by material weights
+```python
+volume = map_dbt_stack_to_volume(
+    stack,
+    f_depth,
+    splat=True,
+    kernel="gaussian",
+    kernel_width_mode="angular",
+)
 ```
 
-The densities are expressed in g/cm3, and the fractional weights are expressed as atomic number – weight pairs.
+`splat=True` spreads each view with the selected kernel. This produces smoother,
+more continuous reconstruction-domain volumes on practical grids. The available
+kernels are `gaussian`, `triangular`, and `sinc`.
+
+## Data Files
+
+Detector material files are in `casymir/data/detectors`. They define elemental
+composition, density, K-fluorescence parameters, conversion gain, and blur
+parameters for active detector layers such as amorphous selenium and CsI.
+
+User-defined filtration materials are in `casymir/data/materials`. Each YAML
+file defines one or more SpekPy materials by chemical formula or fractional
+elemental composition.
