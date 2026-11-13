@@ -55,16 +55,16 @@ class TestDetector(unittest.TestCase):
 
     def test_calculate_fk(self):
         fk_value = self.detector.calculate_fk()
-        expected_fk = 0.8037975690266177
+        expected_fk = 0.8038094231732961
         self.assertAlmostEqual(fk_value, expected_fk, places=6)
 
     def test_calculate_Tk(self):
         tk_value = self.detector.calculate_Tk(self.signal)
 
         # Reference values for second, middle, and last elements
-        reference_tk_second = 0.9999996799903333
-        reference_tk_middle = 0.6766989967662854
-        reference_tk_last = 0.42138829234554287
+        reference_tk_second = 0.9999996766940683
+        reference_tk_middle = 0.6766503927953947
+        reference_tk_last = 0.4218666937545809
 
         self.assertAlmostEqual(tk_value[1], reference_tk_second, places=6)
         self.assertAlmostEqual(tk_value[len(tk_value) // 2], reference_tk_middle, places=6)
@@ -75,8 +75,8 @@ class TestDetector(unittest.TestCase):
         self.detector.get_mu(energy)
         mu = self.detector.mu
 
-        ref_mu_min = 18.945780501755618
-        ref_mu_max = 4969.8482118864395
+        ref_mu_min = 14.76605235458858
+        ref_mu_max = 4949.860165320922
 
         self.assertAlmostEqual(np.min(mu), ref_mu_min, places=6)
         self.assertAlmostEqual(np.max(mu), ref_mu_max, places=6)
@@ -85,7 +85,7 @@ class TestDetector(unittest.TestCase):
         energy = np.linspace(1.05, 27.95, 270, endpoint=True)
         qe = self.detector.get_QE(energy)
 
-        ref_qe_min = 0.8365448463657389
+        ref_qe_min = 0.7562554687123082
         ref_qe_max = 1.0
 
         self.assertAlmostEqual(np.min(qe), ref_qe_min, places=6)
@@ -97,12 +97,11 @@ class TestDetector(unittest.TestCase):
         self.detector_indirect.get_mu(energy)
         com_term_value = self.detector_indirect.com_term_z(energy)
 
-        # Reference values
-        reference_com_term = np.array([[0.00624447, 0.00193421],
-                                       [0.00628118, 0.00193432],
-                                       [0.00631812, 0.00193444],
-                                       [0.00635528, 0.00193457],
-                                       [0.00639268, 0.00193469]])
+        reference_com_term = np.array([[0.00609109, 0.00116783],
+                                       [0.00612559, 0.00116674],
+                                       [0.00616030, 0.00116566],
+                                       [0.00619521, 0.00116458],
+                                       [0.00623034, 0.00116350]])
 
         np.testing.assert_allclose(com_term_value, reference_com_term, atol=1e-6)
 

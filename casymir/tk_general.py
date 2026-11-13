@@ -7,13 +7,13 @@ Source code available online: http://omlc.ogi.edu/classroom/ece532/class4/ssmc/i
 
 Original implementation for scintillator detectors by J.J. Pautasso, adapted by G. Pacheco
 """
+
 import numpy as np
 import scipy.special as ss
 from scipy import integrate
 
 
 def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
-
     """
     Calculate spread function for remotely absorbed K-fluorescence photons.
 
@@ -31,18 +31,26 @@ def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
 
     # Mass absorption coefficients obtained from http://physics.nist.gov/PhysRefData/FFast/html/form.html
 
-    mu_mass_abs = mat["mu_mass_abs"]  # Photoelectric mass absorption coeff in cm²/g at k_energy for detector material
-    mu_mass_total = mat["mu_mass_tot"]  # Total mass absorption coeff in cm²/g at k_energy for detector material
+    mu_mass_abs = mat[
+        "mu_mass_abs"
+    ]  # Photoelectric mass absorption coeff in cm²/g at k_energy for detector material
+    mu_mass_total = mat[
+        "mu_mass_tot"
+    ]  # Total mass absorption coeff in cm²/g at k_energy for detector material
 
     mu_mass_scatter = mu_mass_total - mu_mass_abs
 
-    mua = mu_mass_abs * density * PF  # Convert from mass absorption coeff to linear absorption coeff expressed in 1/cm
-    mus = mu_mass_scatter * density * PF  # Convert from mass scatter coeff to linear scatter coeff expressed in 1/cm
+    mua = (
+        mu_mass_abs * density * PF
+    )  # Convert from mass absorption coeff to linear absorption coeff expressed in 1/cm
+    mus = (
+        mu_mass_scatter * density * PF
+    )  # Convert from mass scatter coeff to linear scatter coeff expressed in 1/cm
 
     low = 0.0
     high = np.max(f)
     incr = f[1] - f[0]
-    dim = int((high/incr))+1
+    dim = int((high / incr)) + 1
     ms = (dim, 2)
 
     tk_emission = np.zeros(ms)
@@ -51,7 +59,9 @@ def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
     threshold = 0.01  # Used in roulette
     chance = 0.1  # Used in roulette
     one_minus_coszero = 1.0e-12
-    seed_value = np.random.RandomState(seed)  # Initializes the seed for the random number generator subroutine
+    seed_value = np.random.RandomState(
+        seed
+    )  # Initializes the seed for the random number generator subroutine
 
     radial_size = 0.5  # Total range over which bins extend in cm
     nr = 1000  # Number of bins
@@ -60,7 +70,9 @@ def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
     r_array = np.zeros(nr)
 
     n_photons = 1e4  # Number of photons used in the simulation
-    albedo = mus / (mus + mua)  # Proportion of the incident light that is reflected by the surface
+    albedo = mus / (
+        mus + mua
+    )  # Proportion of the incident light that is reflected by the surface
     i_photon = 0.0
 
     # Photon position and trajectory
@@ -89,9 +101,9 @@ def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
         Propagate one photon until it dies is determined by Roulette
         """
 
-        while (1):  # while photon_status == alive
+        while 1:  # while photon_status == alive
             """
-            Hop 
+            Hop
             Take a step to new position
             """
             randomvalue = seed_value.uniform(0, 1)
@@ -137,7 +149,7 @@ def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
             # called cospsi and sinpsi.
 
             psi = 2.0 * np.pi * randomvalue
-            cospsi = np.cos(psi);
+            cospsi = np.cos(psi)
 
             if psi < np.pi:
                 sinpsi = np.sqrt(1.0 - cospsi * cospsi)
@@ -156,14 +168,18 @@ def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
                 if uz > 0.0:
                     sign = 1.0
                 else:
-                    sign = - 1.0
+                    sign = -1.0
 
                 uzz = costheta * sign
 
             else:
                 temp = np.sqrt(1.0 - uz * uz)
-                uxx = sintheta * ((ux * uz * cospsi - uy * sinpsi) / temp + ux * costheta)
-                uyy = sintheta * ((uy * uz * cospsi + ux * sinpsi) / temp + uy * costheta)
+                uxx = sintheta * (
+                    (ux * uz * cospsi - uy * sinpsi) / temp + ux * costheta
+                )
+                uyy = sintheta * (
+                    (uy * uz * cospsi + ux * sinpsi) / temp + uy * costheta
+                )
                 uzz = -sintheta * cospsi * temp + uz * costheta
 
             # Update current trajectory
@@ -196,15 +212,17 @@ def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
     for ir in range(nr):
         r = (ir + 0.5) * dr
         shellvolume = 2.0 * np.pi * r * dr  # Per cm length of cylinder
-        c_cyl[ir] = c_cyl[ir] / n_photons / shellvolume / mua  # Provides data in relative fluence rate (1/cm^2)
+        c_cyl[ir] = (
+            c_cyl[ir] / n_photons / shellvolume / mua
+        )  # Provides data in relative fluence rate (1/cm^2)
         c_cyl[ir] = c_cyl[ir] / 100  # To convert from 1/cm^2 to 1/mm^2
         r_array[ir] = r * 10  # To convert from cm to mm
 
     CSF = np.zeros(nr)
     finalrarray = np.zeros(nr)
 
-    finalrarray = np.array(r_array[0:n - 1])
-    CSF = np.array(c_cyl[0:n - 1])
+    finalrarray = np.array(r_array[0 : n - 1])
+    CSF = np.array(c_cyl[0 : n - 1])
 
     k = 0
     csf_array = np.zeros(dim)
@@ -217,8 +235,13 @@ def tk(mat: dict, n: int, f: np.ndarray, seed: int = 10) -> np.ndarray:
     """
 
     for mu in np.linspace(low, high, num=dim, endpoint=True):
-        csf_array[k] = 2 * np.pi * integrate.simpson(CSF * (ss.j0(2 * np.pi * mu * finalrarray)) * finalrarray,
-                                                   finalrarray)
+        csf_array[k] = (
+            2
+            * np.pi
+            * integrate.simpson(
+                CSF * (ss.j0(2 * np.pi * mu * finalrarray)) * finalrarray, finalrarray
+            )
+        )
         x_axis[k] = mu
         k = k + 1
 

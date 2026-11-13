@@ -1,24 +1,24 @@
 # CASYMIR
 
-## IMPORTANT NOTICE
-This repository is currently in transition from CASYMIR v1 to CASYMIR v2.
-The poster presented at IWBI 2026 describes the upcoming v2 implementation. The public v2 code, examples, and documentation are being prepared for release and will be added here after final cleanup and validation.
-
-Expected public release: August 2026.
-
-For the previously reported v1 implementation (projection domain model), see legacy-v1/.
-
 CASYMIR is a generalized cascaded linear systems model for x-ray detector
 resolution and noise propagation. It models the detector as a sequence of gain,
-blur, sampling, and noise processes, and can now carry those signals from the
-original 1D detector chain into 2D projection-domain and 3D reconstruction-domain
-frequency models.
+blur, sampling, and noise processes, and extends the original 1D detector chain
+into 2D projection-domain and 3D reconstruction-domain frequency models.
 
-The implementation is described in:
+The 1D detector model is described in:
 
-Pacheco G, Pautasso JJ, Michielsen K, Sechopoulos I. Software Article: A
-generalized cascaded linear system model implementation for x-ray detectors.
-Medical Physics. 2025;52:e18079. https://doi.org/10.1002/mp.18079
+Pacheco G, Pautasso JJ, Michielsen K, Sechopoulos I.
+[Software Article: A generalized cascaded linear system model implementation
+for x-ray detectors](https://doi.org/10.1002/mp.18079).
+*Medical Physics*. 2025;52(9):e18079.
+
+The 2D and 3D extensions are described in:
+
+Pacheco G, Michielsen K, Sechopoulos I.
+[CASYMIR 2.0: A Publicly Available 3D Parallel Cascaded Model for Task-based
+Optimization of Dual-Energy Digital Breast Tomosynthesis and Dedicated Breast
+CT](https://doi.org/10.5281/zenodo.23064127).
+Presented at the 18th International Workshop on Breast Imaging (IWBI); 2026.
 
 ## Installation
 
@@ -35,7 +35,7 @@ The core dependencies are:
 - spekpy
 - pyyaml
 - tqdm
-- mucoeff==1.0.0
+- mucoeff==1.0.1
 
 `mucoeff` is the default attenuation-coefficient source. `xraydb` is no longer a
 required dependency; install the optional extra only if you need the legacy
@@ -58,22 +58,6 @@ CASYMIR V2 provides four example systems:
 The YAML files describe source and detector hardware. Acquisition choices such
 as view count, angular span, reconstruction filter settings, and voxel sampling
 are set in the calling script or API workflow.
-
-## Examples
-
-Example scripts live in `examples/` and can be run from the repository root:
-
-```bash
-python -m examples.cbct
-python -m examples.novation_prototype
-python -m examples.bct
-python -m examples.dbt
-```
-
-The examples do not require plotting libraries. They save compressed `.npz`
-outputs in `examples/outputs/` by default. Each example saves 3D
-reconstruction-domain arrays, including the signal transfer, Wiener spectrum,
-MTF, NNPS, frequency axes, projection angles, and run metadata.
 
 ## System YAML Format
 
@@ -139,12 +123,16 @@ For CBCT cases where each view uses the same projection-domain signal,
 For DBT, build the stack view by view when focal spot blur, beam obliquity, or
 other angle-dependent terms are active.
 
-Reconstructed 3D volumes use the CASYMIR convention:
+Reconstructed 3D volumes are stored in `[x, y, z]` order, with frequency
+axes `[fx, fy, fz]`:
 
 - `x`: detector-u / transverse scan direction.
-- `y`: reconstructed depth / rotation direction.
+- `y`: reconstructed depth for DBT; the second transverse axis in the
+  rotation plane for circular CBCT.
 - `z`: detector-v / longitudinal direction.
 
+For circular CBCT, `x-y` is the axial/transverse plane and `z` is the
+longitudinal axis.
 ### DBT Fourier Mapping
 
 `map_dbt_stack_to_volume` supports two deposition modes:
@@ -172,10 +160,10 @@ kernels are `gaussian`, `triangular`, and `sinc`.
 
 ## Data Files
 
-Detector material files are in `casymir/data/detectors`. They define elemental
+Detector material files live in `casymir/data/detectors`. They define elemental
 composition, density, K-fluorescence parameters, conversion gain, and blur
 parameters for active detector layers such as amorphous selenium and CsI.
 
-User-defined filtration materials are in `casymir/data/materials`. Each YAML
+User-defined filtration materials live in `casymir/data/materials`. Each YAML
 file defines one or more SpekPy materials by chemical formula or fractional
 elemental composition.

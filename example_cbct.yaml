@@ -1,0 +1,20 @@
+system_id: example cbct
+description: Example benchtop CBCT system
+
+detector:
+  type: indirect
+  active_layer: CsI
+  px_size: 0.4
+  ff: 0.64
+  thickness: 554
+  trapping_depth: 0
+  elems: 256
+  add_noise: 3975
+  extra_materials: []
+
+source:
+  target_angle: 14
+  target: W
+  SID: 144.4
+  filter: [(Al, 2.5)]
+  external_filter: [(Cu, 5.1)]

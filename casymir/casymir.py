@@ -16,17 +16,151 @@ Classes:
 
 - Signal: Stores frequency vector, magnitude, and wiener spectrum for the propagated signals.
 """
-from typing import Tuple, Any
+
+from typing import Tuple, Any, Iterator
 
 from scipy.optimize import curve_fit
-import xraydb as xrdb
+import mucoeff
 import spekpy as sp
 import numpy as np
 import yaml
 from importlib import resources
 
+from typing import Sequence, Optional
+
 from casymir import fk_general
 from casymir import tk_general
+
+_ELEMENT_SYMBOLS = (
+    "H",
+    "He",
+    "Li",
+    "Be",
+    "B",
+    "C",
+    "N",
+    "O",
+    "F",
+    "Ne",
+    "Na",
+    "Mg",
+    "Al",
+    "Si",
+    "P",
+    "S",
+    "Cl",
+    "Ar",
+    "K",
+    "Ca",
+    "Sc",
+    "Ti",
+    "V",
+    "Cr",
+    "Mn",
+    "Fe",
+    "Co",
+    "Ni",
+    "Cu",
+    "Zn",
+    "Ga",
+    "Ge",
+    "As",
+    "Se",
+    "Br",
+    "Kr",
+    "Rb",
+    "Sr",
+    "Y",
+    "Zr",
+    "Nb",
+    "Mo",
+    "Tc",
+    "Ru",
+    "Rh",
+    "Pd",
+    "Ag",
+    "Cd",
+    "In",
+    "Sn",
+    "Sb",
+    "Te",
+    "I",
+    "Xe",
+    "Cs",
+    "Ba",
+    "La",
+    "Ce",
+    "Pr",
+    "Nd",
+    "Pm",
+    "Sm",
+    "Eu",
+    "Gd",
+    "Tb",
+    "Dy",
+    "Ho",
+    "Er",
+    "Tm",
+    "Yb",
+    "Lu",
+    "Hf",
+    "Ta",
+    "W",
+    "Re",
+    "Os",
+    "Ir",
+    "Pt",
+    "Au",
+    "Hg",
+    "Tl",
+    "Pb",
+    "Bi",
+    "Po",
+    "At",
+    "Rn",
+    "Fr",
+    "Ra",
+    "Ac",
+    "Th",
+    "Pa",
+    "U",
+    "Np",
+    "Pu",
+    "Am",
+    "Cm",
+    "Bk",
+    "Cf",
+    "Es",
+    "Fm",
+    "Md",
+    "No",
+    "Lr",
+    "Rf",
+    "Db",
+    "Sg",
+    "Bh",
+    "Hs",
+    "Mt",
+    "Ds",
+    "Rg",
+    "Cn",
+    "Nh",
+    "Fl",
+    "Mc",
+    "Lv",
+    "Ts",
+    "Og",
+)
+_ATOMIC_NUMBERS = {symbol: index + 1 for index, symbol in enumerate(_ELEMENT_SYMBOLS)}
+
+
+def atomic_number(element: str) -> int:
+    symbol = str(element).strip()
+    symbol = symbol[:1].upper() + symbol[1:].lower()
+    try:
+        return _ATOMIC_NUMBERS[symbol]
+    except KeyError as exc:
+        raise ValueError(f"Unknown element symbol: {element}") from exc
 
 
 class Detector:
@@ -95,6 +229,7 @@ class Detector:
         self.elems = 2816
         self.add_noise = 0
         self.QE = []
+        self.mu_source = "BOONE"
 
         self.mu = []
         self.components = []
@@ -107,7 +242,7 @@ class Detector:
 
         if props is not None:
             self.fill_from_dict(props)
-            self.pxa = (self.px_size ** 2) * self.ff
+            self.pxa = (self.px_size**2) * self.ff
 
         self.fk = self.calculate_fk()
 
@@ -118,7 +253,7 @@ class Detector:
         :param yml_file: Path to the YAML file containing material properties.
         """
         try:
-            with open(yml_file, 'r') as stream:
+            with open(yml_file, "r") as stream:
                 prop = yaml.safe_load(stream)
 
                 # Parse the components and other material properties
@@ -162,7 +297,9 @@ class Detector:
             fk = fk_general.fk(self.thickness, self.material)
             return fk
         else:
-            fk = fk_general.fk(self.thickness, self.material, w_hZ=self.components[0][1])
+            fk = fk_general.fk(
+                self.thickness, self.material, w_hZ=self.components[0][1]
+            )
             return fk
 
     def calculate_Tk(self, signal):
@@ -187,13 +324,28 @@ class Detector:
         :param energy: Energy vector
         """
         mu = np.empty((len(energy), len(self.components)))
-        i = 0
-        for component in self.components:
-            mu[:, i] = xrdb.mu_elam(component[0], energy=energy * 1e3, kind='total') \
-                       - xrdb.mu_elam(component[0], energy=energy * 1e3, kind='coh')
-            i += 1
-        weights = [x[1] for x in self.components]
-        mu_comp = np.dot(mu, weights)
+        mu_source = str(self.mu_source).upper()
+        if mu_source == "BOONE":
+            for i, component in enumerate(self.components):
+                Z = atomic_number(component[0])
+                mu[:, i] = mucoeff.mu(16, Z, energy)
+            weights = [x[1] for x in self.components]
+            mu_comp = np.dot(mu, weights)
+        elif mu_source == "XRAYDB":
+            try:
+                import xraydb as xrdb
+            except ImportError as exc:
+                raise ImportError("Install xraydb to use mu_source='XRAYDB'.") from exc
+
+            for i, component in enumerate(self.components):
+                mu[:, i] = xrdb.mu_elam(
+                    component[0], energy=energy * 1e3, kind="total"
+                ) - xrdb.mu_elam(component[0], energy=energy * 1e3, kind="coh")
+            weights = [x[1] for x in self.components]
+            mu_comp = np.dot(mu, weights)
+        else:
+            raise ValueError("mu_source must be 'BOONE' or 'XRAYDB'.")
+
         self.mu = mu_comp
 
     def get_QE(self, energy: np.ndarray) -> np.ndarray:
@@ -204,7 +356,15 @@ class Detector:
         :return: Detector quantum efficiency
         """
         self.get_mu(energy)
-        QE = 1 - np.exp(-(self.mu * self.thickness * 1e-4 * self.material["density"] * self.material["pf"]))
+        QE = 1 - np.exp(
+            -(
+                self.mu
+                * self.thickness
+                * 1e-4
+                * self.material["density"]
+                * self.material["pf"]
+            )
+        )
         self.QE = QE
         return QE
 
@@ -218,9 +378,27 @@ class Detector:
         """
         com_term = np.zeros([self.thickness, len(energy)])
         for z in range(self.thickness):
-            com_term[z, :] = np.exp(-1 * self.mu * (self.thickness - z) * 1e-4 * self.material["density"]
-                                    * self.material["pf"]) * (0.19497 + (0.59363 * np.exp(-z / 310.10304))) \
-                             * (1 - np.exp(-1 * self.mu * 1e-4 * self.material["density"] * self.material["pf"]))
+            com_term[z, :] = (
+                np.exp(
+                    -1
+                    * self.mu
+                    * (self.thickness - z)
+                    * 1e-4
+                    * self.material["density"]
+                    * self.material["pf"]
+                )
+                * (0.19497 + (0.59363 * np.exp(-z / 310.10304)))
+                * (
+                    1
+                    - np.exp(
+                        -1
+                        * self.mu
+                        * 1e-4
+                        * self.material["density"]
+                        * self.material["pf"]
+                    )
+                )
+            )
 
         return com_term
 
@@ -255,7 +433,7 @@ class Tube:
         :param props: Dictionary containing properties to initialize Tube attributes. Default is None.
         """
         self.target_angle = 25
-        self.target = 'W'
+        self.target = "W"
         self.SID = 65
         self.filter = []
         self.external_filter = []
@@ -299,19 +477,29 @@ class System:
     def __init__(self, yml_sys: str):
         self.system_id = " "  # System name
         self.description = " "  # System description
-        self.detector = {}  # Dictionary containing all the detector parameters. Used to create Detector object.
-        self.source = {}  # Dictionary containing all the x-ray source parameters. Used to create Tube object.
-        self.yml_dict = self._load_sys_yml(yml_file=yml_sys)  # Dictionary containing all System information
+        self.detector = (
+            {}
+        )  # Dictionary containing all the detector parameters. Used to create Detector object.
+        self.source = (
+            {}
+        )  # Dictionary containing all the x-ray source parameters. Used to create Tube object.
+        self.yml_dict = self._load_sys_yml(
+            yml_file=yml_sys
+        )  # Dictionary containing all System information
         self.system_id = self.yml_dict["system_id"]
         self.description = self.yml_dict["description"]
         # self.detector = self.yml_dict["detector"]
 
         tube_data = self.yml_dict["source"]
         tube_data["filter"] = self._parse_tuple_list(tube_data.get("filter", []))
-        tube_data["external_filter"] = self._parse_tuple_list(tube_data.get("external_filter", []))
+        tube_data["external_filter"] = self._parse_tuple_list(
+            tube_data.get("external_filter", [])
+        )
 
         detector_data = self.yml_dict["detector"]
-        detector_data["extra_materials"] = self._parse_tuple_list(detector_data.get('extra_materials', []))
+        detector_data["extra_materials"] = self._parse_tuple_list(
+            detector_data.get("extra_materials", [])
+        )
 
         self.source = tube_data
         self.detector = detector_data
@@ -319,7 +507,7 @@ class System:
         self.detector["pxa"] = (self.detector["px_size"] ** 2) * self.detector["ff"]
 
     def _load_sys_yml(self, yml_file: str):
-        with open(yml_file, 'r') as stream:
+        with open(yml_file, "r") as stream:
             try:
                 prop = yaml.safe_load(stream)
                 return prop
@@ -332,8 +520,13 @@ class System:
         Ensure that a list alternating between strings and floats is formatted correctly as a list of tuples.
         This can be used for filters, external filters, or extra materials.
         """
-        return [(list_to_parse[2 * i].strip('()'), float(list_to_parse[2 * i + 1].strip('()')))
-                for i in range(len(list_to_parse) // 2)]
+        return [
+            (
+                list_to_parse[2 * i].strip("()"),
+                float(list_to_parse[2 * i + 1].strip("()")),
+            )
+            for i in range(len(list_to_parse) // 2)
+        ]
 
 
 def _create_matls() -> None:
@@ -345,7 +538,7 @@ def _create_matls() -> None:
 
     for material_file in resources.contents("casymir.data.materials"):
         if material_file.endswith(".yaml"):
-            with folder_path.joinpath(material_file).open('r') as stream:
+            with folder_path.joinpath(material_file).open("r") as stream:
                 try:
                     mat = yaml.safe_load(stream)
                     materials = mat.get("material", [])
@@ -359,17 +552,30 @@ def _create_matls() -> None:
                         composition = material_data.get("composition", {})
 
                         if isinstance(composition, list):
-                            composition_dict = {int(key): value for key, value in composition}
+                            composition_dict = {
+                                int(key): value for key, value in composition
+                            }
                         else:
                             composition_dict = composition
 
                         if composition_dict:
-                            composition_list = [(element, weight) for element, weight in composition_dict.items()]
-                            sp.Spek.make_matl(matl_name=name, matl_density=density, wt_matl_comp=composition_list,
-                                              matl_comment=comment)
+                            composition_list = [
+                                (element, weight)
+                                for element, weight in composition_dict.items()
+                            ]
+                            sp.Spek.make_matl(
+                                matl_name=name,
+                                matl_density=density,
+                                wt_matl_comp=composition_list,
+                                matl_comment=comment,
+                            )
                         else:
-                            sp.Spek.make_matl(matl_name=name, matl_density=density, chemical_formula=formula,
-                                              matl_comment=comment)
+                            sp.Spek.make_matl(
+                                matl_name=name,
+                                matl_density=density,
+                                chemical_formula=formula,
+                                matl_comment=comment,
+                            )
 
                 except yaml.YAMLError as err:
                     print(err)
@@ -407,6 +613,8 @@ class Spectrum:
 
     - dak_filt (float): Air kerma at the entrance of the detector sensitive volume, in μGy.
 
+    - dak_scale (float): Fluence scale applied to match a user-supplied detector air kerma, if provided.
+
     Methods:
     ----------
     - add_filtration: Adds additional filtration to the spectrum.
@@ -427,7 +635,7 @@ class Spectrum:
     SpekPy reference: https://doi.org/10.1002/mp.14945
     """
 
-    def __init__(self, name, kV, mAs, detector, tube, coordinates=None):
+    def __init__(self, name, kV, mAs, detector, tube, coordinates=None, dak_uGy=None):
         """
         Initialize CASYMIR a Spectrum object.
 
@@ -440,6 +648,11 @@ class Spectrum:
           materials.
 
         - Retrieves the energy vector and corresponding fluence at the detector entrance.
+
+        :param dak_uGy: Optional measured detector air kerma in μGy at the detector cover entrance
+                        after tube and external filtration, but before detector-cover materials.
+                        When provided, the spectrum fluence and reported kerma values are rescaled
+                        to match this value while preserving spectral shape.
         """
 
         self.th = tube.target_angle
@@ -455,6 +668,10 @@ class Spectrum:
         self.tube = tube
         self.dak = 0
         self.dak_filt = 0
+        self.dak_unscaled = 0
+        self.dak_filt_unscaled = 0
+        self.dak_scale = 1.0
+        self.dak_uGy = None if dak_uGy is None else float(dak_uGy)
 
         if coordinates is None:
             # The default coordinates represent a point in the detector entrance plane
@@ -463,23 +680,51 @@ class Spectrum:
             self.coordinates = coordinates
 
         # Create Spek object
-        s = sp.Spek(kvp=self.kV, mas=self.mAs, targ=self.tube.target, x=self.coordinates[0], y=self.coordinates[1],
-                    z=self.coordinates[2], th=self.th, dk=0.1)
+        s = sp.Spek(
+            kvp=self.kV,
+            mas=self.mAs,
+            targ=self.tube.target,
+            x=self.coordinates[0],
+            y=self.coordinates[1],
+            z=self.coordinates[2],
+            th=self.th,
+            dk=0.1,
+        )
         # Create filter materials
         _create_matls()
         # Apply filters
         s.multi_filter(filter_list=self.filter)
         s.multi_filter(filter_list=self.ext_filtration)
         # Get DAK (Detector air kerma)
-        self.dak = s.get_kerma()
+        self.dak_unscaled = float(s.get_kerma())
         s.multi_filter(filter_list=self.det_filtration)
         # Get DAK taking the detector cover (if any) into account
-        self.dak_filt = s.get_kerma()
+        self.dak_filt_unscaled = float(s.get_kerma())
+        if self.dak_uGy is not None:
+            if self.dak_uGy <= 0:
+                raise ValueError("dak_uGy must be positive when provided.")
+            if self.dak_unscaled <= 0:
+                raise ValueError(
+                    "Cannot normalize spectrum to dak_uGy because modeled DAK is not positive."
+                )
+            self.dak_scale = self.dak_uGy / self.dak_unscaled
+            self.dak = self.dak_uGy
+            self.dak_filt = self.dak_filt_unscaled * self.dak_scale
+        else:
+            self.dak = self.dak_unscaled
+            self.dak_filt = self.dak_filt_unscaled
         # Spectrum at detector entrance
         self.spec = s
         # Retrieve energy and fluence
-        self.energy, self.fluence = self.spec.get_spectrum(edges=False, flu=True, diff=False, x=self.coordinates[0],
-                                                           y=self.coordinates[1], z=self.coordinates[2])
+        self.energy, self.fluence = self.spec.get_spectrum(
+            edges=False,
+            flu=True,
+            diff=False,
+            x=self.coordinates[0],
+            y=self.coordinates[1],
+            z=self.coordinates[2],
+        )
+        self.fluence = self.fluence * self.dak_scale
 
     def add_filtration(self, materials: list[tuple[str, float]]) -> None:
         """
@@ -535,7 +780,7 @@ class Spectrum:
         else:
             x, y, z = coordinates
 
-        k_air = self.spec.get_kerma(norm=False, x=x, y=y, z=z)
+        k_air = self.spec.get_kerma(norm=False, x=x, y=y, z=z) * self.dak_scale
         return k_air
 
     def get_incident_spec(self, coordinates=None) -> tuple[np.ndarray, np.ndarray]:
@@ -553,7 +798,10 @@ class Spectrum:
         else:
             x, y, z = coordinates
 
-        energy, spectrum = self.spec.get_spectrum(edges=False, flu=True, diff=False, x=x, y=y, z=z)
+        energy, spectrum = self.spec.get_spectrum(
+            edges=False, flu=True, diff=False, x=x, y=y, z=z
+        )
+        spectrum = spectrum * self.dak_scale
         return energy, spectrum
 
     def get_fluence(self, coordinates=None) -> float:
@@ -571,7 +819,7 @@ class Spectrum:
         else:
             x, y, z = coordinates
 
-        fluence = self.spec.get_flu(x=x, y=y, z=z) * 1e-2
+        fluence = self.spec.get_flu(x=x, y=y, z=z) * 1e-2 * self.dak_scale
         return fluence
 
 
@@ -610,7 +858,13 @@ class Signal:
     - fit: Fits MTF and NNPS curves.
     """
 
-    def __init__(self, freq: np.ndarray, mean_quanta: float, signal: np.ndarray, wiener: np.ndarray):
+    def __init__(
+        self,
+        freq: np.ndarray,
+        mean_quanta: float,
+        signal: np.ndarray,
+        wiener: np.ndarray,
+    ):
         """
         Initialize a CASYMIR Signal object.
 
@@ -635,7 +889,7 @@ class Signal:
         """
         mean_quanta_2 = mean_gain * self.mean_quanta
         signal_2 = mean_gain * self.signal
-        wiener_2 = ((mean_gain ** 2) * self.wiener) + ((gain_std ** 2) * self.mean_quanta)
+        wiener_2 = ((mean_gain**2) * self.wiener) + ((gain_std**2) * self.mean_quanta)
         self.mean_quanta = mean_quanta_2
         self.signal = signal_2
         self.wiener = wiener_2
@@ -647,7 +901,7 @@ class Signal:
         :param t: Spread function in frequency domain
         """
         signal_2 = t * self.signal
-        wiener_2 = ((t ** 2) * self.wiener + (1 - t ** 2) * self.mean_quanta)
+        wiener_2 = (t**2) * self.wiener + (1 - t**2) * self.mean_quanta
         self.signal = signal_2
         self.wiener = wiener_2
 
@@ -659,12 +913,14 @@ class Signal:
         """
         mean_quanta_2 = a[0] * self.mean_quanta
         signal_2 = a * self.signal
-        wiener_2 = ((a ** 2) * self.wiener)
+        wiener_2 = (a**2) * self.wiener
         self.mean_quanta = mean_quanta_2
         self.signal = signal_2
         self.wiener = wiener_2
 
-    def fit(self, type_mtf: str = "lorentzian", type_nps: str = "gaussian") -> Tuple[Any, Any]:
+    def fit(
+        self, type_mtf: str = "lorentzian", type_nps: str = "gaussian"
+    ) -> Tuple[Any, Any]:
         """
         Fit curves to the MTF and NPS.
 
@@ -687,21 +943,37 @@ class Signal:
         """
         # Fit functions.
         fit_functions = {
-            "gaussian": lambda x, a, b, c, d: a * np.exp(- (x / b) ** 2) + c * np.exp(- (x / d) ** 2),
-            "poly4_mtf": lambda x, a, b, c, d: 1 + a * x + b * (x ** 2) + c * (x ** 3) + d * (x ** 4),
-            "lorentzian": lambda x, a, b, c: a / (1 + (x / b) ** 2) + (1 - a) / (1 + (x / c) ** 2),
-            "poly4": lambda x, m, a, b, c, d: m + a * x + b * (x ** 2) + c * (x ** 3) + d * (x ** 4)
+            "gaussian": lambda x, a, b, c, d: a * np.exp(-((x / b) ** 2))
+            + c * np.exp(-((x / d) ** 2)),
+            "poly4_mtf": lambda x, a, b, c, d: 1
+            + a * x
+            + b * (x**2)
+            + c * (x**3)
+            + d * (x**4),
+            "lorentzian": lambda x, a, b, c: a / (1 + (x / b) ** 2)
+            + (1 - a) / (1 + (x / c) ** 2),
+            "poly4": lambda x, m, a, b, c, d: m
+            + a * x
+            + b * (x**2)
+            + c * (x**3)
+            + d * (x**4),
         }
         # Fit initalization. This is needed for the NPS Gaussian fit.
-        p0 = {"gaussian": [np.mean(self.nnps), 10, np.mean(self.nnps), 10],
-              "poly4_mtf": None, "lorentzian": None, "poly4": None}
+        p0 = {
+            "gaussian": [np.mean(self.nnps), 10, np.mean(self.nnps), 10],
+            "poly4_mtf": None,
+            "lorentzian": None,
+            "poly4": None,
+        }
 
         def generic_fit(fit_type: str, func_name: str, x_data, y_data):
             if func_name not in fit_functions:
                 print(f"Undefined fit function: {fit_type}")
                 return None
             try:
-                popt, _ = curve_fit(fit_functions[func_name], x_data, y_data, p0=p0[func_name])
+                popt, _ = curve_fit(
+                    fit_functions[func_name], x_data, y_data, p0=p0[func_name]
+                )
                 return popt
             except Exception as e:
                 print(f"Error fitting {fit_type}: {e}")
@@ -712,15 +984,185 @@ class Signal:
         popt_mtf = generic_fit("MTF", mtf_func_name, self.freq, self.mtf)
 
         if popt_mtf is not None:
-            print(f"MTF {type_mtf} fit parameters: " +
-                  ", ".join(f"c{i + 1}={p:.5f}" for i, p in enumerate(popt_mtf)))
+            print(
+                f"MTF {type_mtf} fit parameters: "
+                + ", ".join(f"c{i + 1}={p:.5f}" for i, p in enumerate(popt_mtf))
+            )
 
         # Fit NPS
         nps_func_name = "gaussian" if type_nps == "gaussian" else "poly4"
         popt_nps = generic_fit("NPS", nps_func_name, self.freq, self.nnps)
 
         if popt_nps is not None:
-            print(f"NPS {type_nps} fit parameters: " +
-                  ", ".join(f"c{i + 1}={p:.5E}" for i, p in enumerate(popt_nps)))
+            print(
+                f"NPS {type_nps} fit parameters: "
+                + ", ".join(f"c{i + 1}={p:.5E}" for i, p in enumerate(popt_nps))
+            )
 
         return popt_mtf, popt_nps
+
+
+class SignalND:
+    """
+    Signal container for 2D/3D models.
+
+    Convention for 2D:
+        x -> rows / detector-u (axis 0)
+        y -> cols / detector-v (axis 1). This is projection-domain detector-v,
+             not reconstructed depth.
+
+    Convention for 3D:
+        x -> detector-u / transverse scan direction (axis 0)
+        y -> reconstructed depth for DBT; second transverse axis in the CBCT
+             rotation plane (axis 1)
+        z -> detector-v / longitudinal direction (axis 2)
+
+    Frequency axes are centered in [-f_max, f_max), zero at index N//2.
+    The meaning of ``fy`` is therefore stage-dependent:
+        - 2D SignalND: detector-v frequency
+        - 3D DBT SignalND: reconstructed depth frequency
+        - 3D CBCT SignalND: second transverse frequency in the rotation plane
+    """
+
+    def __init__(
+        self,
+        axes: Sequence[np.ndarray],
+        S: np.ndarray,
+        W: np.ndarray,
+        mean_quanta: float,
+    ):
+        self.axes = [np.asarray(a) for a in axes]
+        self.grids = np.meshgrid(*self.axes, indexing="ij")
+        self.S = np.asarray(S)
+        self.W = np.asarray(W)
+        self.mean_quanta = float(mean_quanta)
+        self.mtf: Optional[np.ndarray] = None
+        self.nnps: Optional[np.ndarray] = None
+        self._cidx = tuple(len(ax) // 2 for ax in self.axes)
+
+    @property
+    def ndim(self) -> int:
+        return len(self.axes)
+
+    @property
+    def fx(self) -> np.ndarray:  # row freq
+        return self.axes[0]
+
+    @property
+    def fy(self) -> np.ndarray:
+        # 2D: detector-v frequency. 3D: reconstructed depth frequency.
+        return self.axes[1]
+
+    @property
+    def FX(self) -> np.ndarray:
+        return self.grids[0]
+
+    @property
+    def FY(self) -> np.ndarray:
+        return self.grids[1]
+
+    @property
+    def fz(self) -> np.ndarray:
+        return self.axes[2]
+
+    @property
+    def FZ(self) -> np.ndarray:
+        return self.grids[2]
+
+    def deterministic_blur(self, A: np.ndarray) -> None:
+        """
+        Apply the deterministic blur transfer function to a SignalND object.
+        """
+        A = np.asarray(A)
+        mean_quanta_2 = float(A[self._cidx]) * self.mean_quanta
+        signal_2 = A * self.S
+        wiener_2 = (A**2) * self.W
+        self.mean_quanta = mean_quanta_2
+        self.S = signal_2
+        self.W = wiener_2
+
+    def stochastic_gain(self, g: float, g_std: float) -> None:
+        """
+        Apply the stochastic gain transfer function to a SignalND object.
+        """
+        mean_quanta_2 = g * self.mean_quanta
+        signal_2 = g * self.S
+        wiener_2 = ((g**2) * self.W) + ((g_std**2) * self.mean_quanta)
+        self.mean_quanta = mean_quanta_2
+        self.S = signal_2
+        self.W = wiener_2
+
+    def copy(self) -> "SignalND":
+        """
+        Return a value copy of this signal container.
+        """
+        out = SignalND(self.axes, self.S.copy(), self.W.copy(), self.mean_quanta)
+        out.mtf = None if self.mtf is None else self.mtf.copy()
+        out.nnps = None if self.nnps is None else self.nnps.copy()
+        return out
+
+
+class SignalStack:
+    """
+    Stack of 2D projection-domain signals.
+
+    ``fx`` is detector-u / scan-x frequency. ``fy`` is the second 2D detector
+    frequency, detector-v. After 3D mapping, this detector-v axis becomes the
+    reconstructed 3D z axis; reconstructed depth-y is supplied separately.
+    """
+
+    def __init__(
+        self,
+        fx: np.ndarray,
+        fy: np.ndarray,
+        Nv: int,
+        angles_rad: np.ndarray,
+        dtype: np.dtype = np.float32,
+    ):
+        self.fx = np.asarray(fx).copy()
+        self.fy = np.asarray(fy).copy()
+        self.Nv = int(Nv)
+        self.angles = np.asarray(angles_rad, dtype=float)
+        self.dtype = np.dtype(dtype)
+        self._next = 0
+        Nx, Ny = len(self.fx), len(self.fy)
+        self.S = np.zeros((Nv, Nx, Ny), dtype=self.dtype)
+        self.W = np.zeros((Nv, Nx, Ny), dtype=self.dtype)
+        self.mean_quanta = np.zeros(Nv, dtype=float)
+
+    def append(self, signal: SignalND, angle_rad: float) -> int:
+        if self._next >= self.Nv:
+            raise IndexError("Stack is full")
+        i = self._next
+        self.S[i, :, :] = signal.S.astype(self.dtype, copy=False)
+        self.W[i, :, :] = signal.W.astype(self.dtype, copy=False)
+        self.mean_quanta[i] = float(getattr(signal, "mean_quanta", 0.0))
+        self.angles[i] = float(angle_rad)
+        self._next += 1
+        return i
+
+    def __len__(self) -> int:
+        return self.Nv
+
+    def view(self, i: int) -> SignalND:
+        sig = SignalND(
+            [self.fx, self.fy],
+            self.S[i],
+            self.W[i],
+            float(self.mean_quanta[i]),
+        )
+
+        # Compute MTF and NNPS on demand
+        ix0 = len(self.fx) // 2
+        iy0 = len(self.fy) // 2
+
+        S0 = np.abs(sig.S[ix0, iy0]) + 1e-12
+
+        sig.mtf = np.abs(sig.S) / S0
+        sig.nnps = sig.W / (S0**2)
+
+        return sig
+
+    def iter_views(self) -> Iterator[Tuple[int, SignalND]]:
+        for i in range(self.Nv):
+            yield i, self.view(i)

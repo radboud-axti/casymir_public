@@ -3,6 +3,7 @@ Probability for K-fluorescence reabsorption within the detector active layer.
 
 Original implemetation for scintillator detectors by J.J. Pautasso, adapted by G. Pacheco
 """
+
 import numpy as np
 from scipy import integrate
 
@@ -24,8 +25,12 @@ def fk(thickness: float, mat: dict, w_hZ: float = 1) -> float:
     theta = 0
 
     # Mass absorption coefficients obtained from http://physics.nist.gov/PhysRefData/FFast/html/form.html
-    mu_mass_abs = mat["mu_mass_abs"]  # Photoelectric mass absorption coeff in cm²/g at k_energy for detector material
-    mu_mass_tot = mat["mu_mass_tot"]  # Total mass absorption coeff in cm²/g at k_energy for detector material
+    mu_mass_abs = mat[
+        "mu_mass_abs"
+    ]  # Photoelectric mass absorption coeff in cm²/g at k_energy for detector material
+    mu_mass_tot = mat[
+        "mu_mass_tot"
+    ]  # Total mass absorption coeff in cm²/g at k_energy for detector material
 
     L = thickness * 1e-4 * density * PF  # Active layer density (g/cm²)
     n = int(L * 700)  # Number of layers
@@ -45,7 +50,9 @@ def fk(thickness: float, mat: dict, w_hZ: float = 1) -> float:
     solid_angle = np.zeros(max_count)
     Layers = np.zeros(n)
     eta = np.pi / (2 * m)
-    Pix = np.zeros(n)  # Absorption probability for a K-alpha or K-beta photon originating from the ith layer
+    Pix = np.zeros(
+        n
+    )  # Absorption probability for a K-alpha or K-beta photon originating from the ith layer
 
     """
     The active layer is asummed to be a uniform medium of infinite area and thickness L. 
@@ -68,16 +75,34 @@ def fk(thickness: float, mat: dict, w_hZ: float = 1) -> float:
 
             if j < m:
 
-                P1[count] = 2.0 * np.pi * (np.cos((j) * eta) - np.cos((j + 1.0) * eta)) / (4.0 * np.pi)
-                P2[count] = (1 - np.exp(
-                    -mu_mass_tot * (n - i - 1.0 + 0.5) * deltaL / (abs(np.cos((j + 1.0 - 0.5) * eta)))))
+                P1[count] = (
+                    2.0
+                    * np.pi
+                    * (np.cos((j) * eta) - np.cos((j + 1.0) * eta))
+                    / (4.0 * np.pi)
+                )
+                P2[count] = 1 - np.exp(
+                    -mu_mass_tot
+                    * (n - i - 1.0 + 0.5)
+                    * deltaL
+                    / (abs(np.cos((j + 1.0 - 0.5) * eta)))
+                )
                 P0[count] = P1[count] * P2[count]
 
             else:
 
-                P1[count] = 2.0 * np.pi * (np.cos(j * eta) - np.cos((j + 1.0) * eta)) / (4.0 * np.pi)
-                P2[count] = (1 - np.exp(
-                    -mu_mass_tot * (i + 1.0 - 0.5) * deltaL / (abs(np.cos((j + 1.0 - 0.5) * eta)))))
+                P1[count] = (
+                    2.0
+                    * np.pi
+                    * (np.cos(j * eta) - np.cos((j + 1.0) * eta))
+                    / (4.0 * np.pi)
+                )
+                P2[count] = 1 - np.exp(
+                    -mu_mass_tot
+                    * (i + 1.0 - 0.5)
+                    * deltaL
+                    / (abs(np.cos((j + 1.0 - 0.5) * eta)))
+                )
                 P0[count] = P1[count] * P2[count]
 
             j = j + inc
@@ -99,7 +124,7 @@ def fk(thickness: float, mat: dict, w_hZ: float = 1) -> float:
 
     """
 
-    PF0 = ((w_hZ * mu_mass_abs * xi * omega * Ix) / mu_mass_tot)
+    PF0 = (w_hZ * mu_mass_abs * xi * omega * Ix) / mu_mass_tot
 
     """
     Where:
@@ -111,8 +136,8 @@ def fk(thickness: float, mat: dict, w_hZ: float = 1) -> float:
     """
 
     for k in range(n):
-        PF1[k] = (np.exp(-(mu_mass_tot * k * deltaL)) / np.cos(theta))
-        PF2[k] = (np.exp(-(mu_mass_tot * (k + 1) * deltaL)) / np.cos(theta))
+        PF1[k] = np.exp(-(mu_mass_tot * k * deltaL)) / np.cos(theta)
+        PF2[k] = np.exp(-(mu_mass_tot * (k + 1) * deltaL)) / np.cos(theta)
 
     """
     The total probability of Kx-reabsorption for an incident x-ray of energy E and incident angle theta is given by:

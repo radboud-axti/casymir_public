@@ -65,3 +65,22 @@ class TestSpectrum(unittest.TestCase):
         fluence = spectrum.get_fluence(coordinates=(0, 0, 95))
         self.assertEqual(fluence, 26513 * 1e-2)
         spectrum.spec.get_flu.assert_called_once_with(x=0, y=0, z=95)
+
+    def test_measured_dak_scales_fluence(self):
+        target_dak = 2.0
+        spectrum = Spectrum('test_spec', 51.1, 0.52364, self.mock_detector, self.mock_tube, dak_uGy=target_dak)
+        reference = Spectrum('test_spec', 51.1, 0.52364, self.mock_detector, self.mock_tube)
+
+        self.assertAlmostEqual(spectrum.dak, target_dak, places=12)
+        self.assertAlmostEqual(spectrum.dak_scale, target_dak / spectrum.dak_unscaled, places=12)
+        self.assertAlmostEqual(spectrum.dak_filt, spectrum.dak_filt_unscaled * spectrum.dak_scale, places=12)
+        self.assertAlmostEqual(spectrum.get_fluence() / reference.get_fluence(), spectrum.dak_scale, places=12)
+
+        energy, incident = spectrum.get_incident_spec()
+        ref_energy, ref_incident = reference.get_incident_spec()
+        np.testing.assert_array_equal(energy, ref_energy)
+        np.testing.assert_allclose(incident, ref_incident * spectrum.dak_scale)
+
+    def test_measured_dak_must_be_positive(self):
+        with self.assertRaises(ValueError):
+            Spectrum('test_spec', 51.1, 0.52364, self.mock_detector, self.mock_tube, dak_uGy=0.0)

@@ -32,6 +32,7 @@ Auxilliary Functions:
 - find_prob_before_lca: Determines the probability of a given Path before reaching the LCA Node, used
                         for adequately scaling the input Wiener Spectra and Mean Quanta for the cross-term computation.
 """
+
 import numpy as np
 import copy
 
@@ -193,19 +194,38 @@ def apply_parallel_process(parent_node, signal, detector, spectrum):
             if common_ancestor is not None:
 
                 # Locate the probability history entry corresponding to the last probability BEFORE the common ancestor
-                prob_scaling_a = find_prob_before_lca(prob_history_a, parent_a, common_ancestor)
-                prob_scaling_b = find_prob_before_lca(prob_history_b, parent_b, common_ancestor)
+                prob_scaling_a = find_prob_before_lca(
+                    prob_history_a, parent_a, common_ancestor
+                )
+                prob_scaling_b = find_prob_before_lca(
+                    prob_history_b, parent_b, common_ancestor
+                )
                 prob_scaling = min(prob_scaling_a, prob_scaling_b)
 
                 if common_ancestor.node_type == "Bernoulli":
                     prob = get_lca_probability(common_ancestor, parent_a, parent_b)
                     k_ab = -prob * (1 - prob)
-                    W_ab = - path_gains[i] * path_gains[j] * path_transfers[i] * path_transfers[j] * k_ab \
-                           * (signal.wiener * prob_scaling - signal.mean_quanta * prob_scaling)
+                    W_ab = (
+                        -path_gains[i]
+                        * path_gains[j]
+                        * path_transfers[i]
+                        * path_transfers[j]
+                        * k_ab
+                        * (
+                            signal.wiener * prob_scaling
+                            - signal.mean_quanta * prob_scaling
+                        )
+                    )
 
                 elif common_ancestor.node_type == "Fork":
-                    W_ab = path_gains[i] * path_gains[j] * path_transfers[i] * path_transfers[
-                        j] * signal.wiener * prob_scaling
+                    W_ab = (
+                        path_gains[i]
+                        * path_gains[j]
+                        * path_transfers[i]
+                        * path_transfers[j]
+                        * signal.wiener
+                        * prob_scaling
+                    )
 
                 combined_signal.wiener += 2 * W_ab
 
